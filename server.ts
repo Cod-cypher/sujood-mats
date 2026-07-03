@@ -4,6 +4,7 @@
  */
 
 import express from "express";
+import cors from "cors";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
@@ -28,10 +29,27 @@ import {
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+// Port is configurable via the PORT env var (defaults to 3000). Set it in .env
+// if 3000 is already taken on the host — remember to match it in the Caddyfile.
+const PORT = Number(process.env.PORT) || 3000;
 
-// Behind a proxy/load balancer we still want the real client IP.
+// Behind a proxy/load balancer (Caddy) we still want the real client IP.
 app.set("trust proxy", true);
+
+// CORS: the frontend (GitHub Pages) is a different origin from this API.
+// Set CORS_ORIGIN to a comma-separated allowlist, e.g.
+//   CORS_ORIGIN="https://sujoodmats.com,https://www.sujoodmats.com"
+// If unset, all origins are allowed (fine for local dev).
+const allowedOrigins = (process.env.CORS_ORIGIN ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+app.use(
+  cors({
+    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+  })
+);
+
 app.use(express.json());
 
 // ---------------------- ANALYTICS HELPERS ----------------------

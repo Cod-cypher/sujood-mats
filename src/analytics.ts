@@ -7,6 +7,8 @@
 // no-permission location signals (timezone + locale-derived country), and
 // ships events to the backend. Everything is best-effort and never throws.
 
+import { apiUrl } from "./config";
+
 const SESSION_KEY = "sujood_session_id";
 const CART_KEY = "sujood_cart_id";
 
@@ -94,7 +96,7 @@ export function initAnalytics(): Promise<void> {
     landingPage: typeof location !== "undefined" ? location.pathname + location.search : null,
     ...parseUtm(),
   };
-  sessionReady = fetch("/api/session", {
+  sessionReady = fetch(apiUrl("/api/session"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -127,10 +129,10 @@ export function track(eventType: string, props: TrackProps = {}, useBeacon = fal
   try {
     if (useBeacon && typeof navigator !== "undefined" && navigator.sendBeacon) {
       const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
-      navigator.sendBeacon("/api/track", blob);
+      navigator.sendBeacon(apiUrl("/api/track"), blob);
       return;
     }
-    fetch("/api/track", {
+    fetch(apiUrl("/api/track"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -168,10 +170,10 @@ export function syncCart(
   try {
     if (useBeacon && typeof navigator !== "undefined" && navigator.sendBeacon) {
       const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
-      navigator.sendBeacon("/api/cart/sync", blob);
+      navigator.sendBeacon(apiUrl("/api/cart/sync"), blob);
       return;
     }
-    fetch("/api/cart/sync", {
+    fetch(apiUrl("/api/cart/sync"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

@@ -1,0 +1,16 @@
+# Caddy config for Sujood (single origin: frontend + API on one server).
+# Install to /etc/caddy/Caddyfile on the Ubuntu server.
+# Caddy automatically obtains and renews Let's Encrypt certificates, so the whole
+# site is served over HTTPS with no manual cert steps.
+
+# Redirect www -> apex (canonical domain).
+www.sujoodmats.com {
+	redir https://sujoodmats.com{uri} permanent
+}
+
+# The Express server serves BOTH the built frontend (dist/) and the /api routes.
+# The app runs on port 3001 (PORT=3001 in .env), since 3000 is used by another app.
+sujoodmats.com {
+	encode gzip
+	reverse_proxy 127.0.0.1:3001
+}

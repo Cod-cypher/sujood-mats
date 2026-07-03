@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { X, Trash2, ShieldCheck, ArrowRight, HeartHandshake, CheckCircle2, ShoppingBag } from "lucide-react";
 import { CartItem } from "../types";
 import { track, syncCart, getSessionId, getCartId, resetCartId } from "../analytics";
+import { apiUrl } from "../config";
 
 interface CartProps {
   isOpen: boolean;
@@ -79,7 +80,7 @@ export default function Cart({
     const cartId = getCartId();
     try {
       track("add_shipping_info", { cartId, value: grandTotal });
-      const response = await fetch("/api/checkout", {
+      const response = await fetch(apiUrl("/api/checkout"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
