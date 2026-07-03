@@ -7,6 +7,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Trash2, ShieldCheck, ArrowRight, HeartHandshake, CheckCircle2, ShoppingBag } from "lucide-react";
 import { CartItem } from "../types";
+import { track, syncCart, getSessionId, getCartId, resetCartId } from "../analytics";
 
 interface CartProps {
   isOpen: boolean;
@@ -53,30 +54,57 @@ export default function Cart({
     setCustomerInfo((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Location context we can capture without a permission prompt.
+  const localeCountry = () => {
+    try {
+      const loc = new Intl.Locale(navigator.language) as any;
+      return loc.maximize?.().region ?? loc.region ?? undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const timezone = () => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    } catch {
+      return undefined;
+    }
+  };
+
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerInfo.name || !customerInfo.email || !customerInfo.address) return;
 
     setIsLoading(true);
+    const cartId = getCartId();
     try {
+      track("add_shipping_info", { cartId, value: grandTotal });
       const response = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cartItems,
-          customerInfo,
+          customerInfo: {
+            ...customerInfo,
+            country: localeCountry(),
+            timezone: timezone(),
+          },
+          sessionId: getSessionId(),
+          cartId,
         }),
       });
 
       if (!response.ok) throw new Error("Checkout failed.");
 
       const data = await response.json();
+      track("purchase", { cartId, orderId: data.orderId, value: data.total });
+      resetCartId(); // next add-to-cart starts a fresh cart
       setOrderConfirmation(data);
       setStep("confirmation");
       onClearCart(); // empty local cart on success
     } catch (err) {
       console.error(err);
-      alert("We encountered an issue preparing your devotions. Please try again.");
+      alert("Something went wrong placing your order. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -110,7 +138,7 @@ export default function Cart({
               <div className="flex items-center space-x-2">
                 <ShoppingBag className="w-5 h-5 text-clay-ochre" />
                 <h3 className="font-serif text-lg tracking-wide">
-                  {step === "confirmation" ? "Sacred Covenant" : "Woven Devotional Sanctuary"}
+                  {step === "confirmation" ? "Order Confirmed" : "Your Cart"}
                 </h3>
               </div>
               <button
@@ -134,7 +162,7 @@ export default function Cart({
                 </button>
                 <span className="text-spruce-300">/</span>
                 <span className={step === "shipping" ? "text-spruce-950 font-semibold" : ""}>
-                  2. SHIPPING SANCTUARY
+                  2. SHIPPING
                 </span>
               </div>
             )}
@@ -155,16 +183,16 @@ export default function Cart({
                       <ShoppingBag className="w-6 h-6" />
                     </div>
                     <div>
-                      <h4 className="font-serif text-lg text-spruce-950 font-semibold">Your sanctuary is vacant</h4>
+                      <h4 className="font-serif text-lg text-spruce-950 font-semibold">Your cart is empty</h4>
                       <p className="text-xs text-spruce-500 mt-2 max-w-[240px] leading-relaxed mx-auto">
-                        Explore our customizer and staggered loom collections to begin crafting your personal sanctuary space.
+                        Browse our collection to find a prayer mat that works for you.
                       </p>
                     </div>
                     <button
                       onClick={onClose}
                       className="cursor-pointer px-5 py-2.5 bg-spruce-800 text-spruce-950 hover:bg-spruce-200 text-xs font-semibold rounded-full transition-colors duration-200 border border-spruce-100"
                     >
-                      Browse Selections
+                      Browse Products
                     </button>
                   </motion.div>
                 )}
@@ -253,11 +281,11 @@ export default function Cart({
                     className="space-y-4"
                   >
                     <h4 className="font-serif text-sm font-semibold text-spruce-900 border-b border-spruce-100 pb-2">
-                      Recipient & Devotional Address
+                      Shipping Details
                     </h4>
 
                     <div className="space-y-1">
-                      <label className="text-[10px] font-mono text-spruce-400 block">FULL LEGAL NAME</label>
+                      <label className="text-[10px] font-mono text-spruce-400 block">FULL NAME</label>
                       <input
                         required
                         type="text"
@@ -270,7 +298,7 @@ export default function Cart({
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[10px] font-mono text-spruce-400 block">SECURE EMAIL ADDRESS</label>
+                      <label className="text-[10px] font-mono text-spruce-400 block">EMAIL ADDRESS</label>
                       <input
                         required
                         type="email"
@@ -283,14 +311,14 @@ export default function Cart({
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[10px] font-mono text-spruce-400 block">STREET ADDRESS & UNIT</label>
+                      <label className="text-[10px] font-mono text-spruce-400 block">STREET ADDRESS</label>
                       <input
                         required
                         type="text"
                         name="address"
                         value={customerInfo.address}
                         onChange={handleInputChange}
-                        placeholder="1248 Sacred Way, Apt 3B"
+                        placeholder="1248 Main St, Apt 3B"
                         className="w-full px-4 py-2 text-xs border border-spruce-200 rounded-lg bg-spruce-50 text-spruce-950 focus:outline-hidden focus:ring-1 focus:ring-clay-ochre focus:border-clay-ochre"
                       />
                     </div>
@@ -326,7 +354,7 @@ export default function Cart({
                     <div className="p-3 bg-spruce-50 border border-spruce-100 rounded-lg text-[11px] text-spruce-600 leading-relaxed flex items-start space-x-2.5 mt-4">
                       <ShieldCheck className="w-4.5 h-4.5 text-spruce-700 flex-shrink-0 mt-0.5" />
                       <span>
-                        Secure hand-woven registration. Sujood utilizes client-side isolated mock transacting for preview fidelity. No real funds are moved.
+                        This is a demo checkout. No payment is processed and no real funds are moved.
                       </span>
                     </div>
 
@@ -335,7 +363,7 @@ export default function Cart({
                       disabled={isLoading}
                       className="cursor-pointer w-full py-3.5 bg-clay-ochre text-clay-ink hover:bg-white hover:text-clay-ink hover:border-white disabled:bg-spruce-200 disabled:text-spruce-400 font-semibold text-sm rounded-full transition-all duration-200 shadow-md border border-clay-ochre mt-4 flex items-center justify-center space-x-2"
                     >
-                      {isLoading ? "Weaving Sanctuary..." : "Finalize Hand-Woven Order"}
+                      {isLoading ? "Placing order..." : "Place Order"}
                     </button>
                   </motion.form>
                 )}
@@ -363,16 +391,16 @@ export default function Cart({
 
                       <div className="border-t border-spruce-50 pt-3 space-y-2 text-xs font-mono">
                         <div className="flex justify-between">
-                          <span className="text-spruce-400">TOTAL TRANSFERRED:</span>
+                          <span className="text-spruce-400">TOTAL PAID:</span>
                           <span className="text-spruce-900 font-bold">${orderConfirmation.total} USD</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-spruce-400">ESTIMATED LANDING:</span>
+                          <span className="text-spruce-400">ESTIMATED DELIVERY:</span>
                           <span className="text-spruce-900 font-medium">{orderConfirmation.estimatedDelivery}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-spruce-400">STATUS:</span>
-                          <span className="text-clay-accent font-semibold">PREPARING ON LOOM</span>
+                          <span className="text-clay-accent font-semibold">PROCESSING</span>
                         </div>
                       </div>
                     </div>
@@ -380,7 +408,7 @@ export default function Cart({
                     <div className="p-3.5 bg-spruce-50 border border-spruce-100 rounded-lg text-left space-y-1">
                       <h5 className="text-[10px] font-mono uppercase text-spruce-700 tracking-wider">What happens next?</h5>
                       <p className="text-[10px] text-spruce-600 leading-relaxed">
-                        Our master artisans in Bursa will select the finest yarn fibers, mount your bespoke pattern specifications onto the looms, and prepare your prayer sanctuary. We will email tracking updates directly.
+                        We'll prepare and pack your order, then email you tracking updates as it ships.
                       </p>
                     </div>
 
@@ -388,7 +416,7 @@ export default function Cart({
                       onClick={onClose}
                       className="cursor-pointer w-full py-3 bg-spruce-800 text-spruce-950 hover:bg-spruce-200 text-xs font-semibold rounded-full transition-all duration-200 border border-spruce-100"
                     >
-                      Return to Devotional Gallery
+                      Continue Shopping
                     </button>
                   </motion.div>
                 )}
@@ -401,31 +429,48 @@ export default function Cart({
               <div className="p-6 border-t border-spruce-100 bg-spruce-50 space-y-4 shadow-xl">
                 <div className="space-y-1.5 text-xs font-mono">
                   <div className="flex justify-between text-spruce-500">
-                    <span>Loom Subtotal:</span>
+                    <span>Subtotal:</span>
                     <span>${subtotal}</span>
                   </div>
                   {bundleDiscount > 0 && (
                     <div className="flex justify-between text-clay-accent font-medium flex-wrap gap-1">
-                      <span className="flex items-center"><HeartHandshake className="w-3.5 h-3.5 mr-1" /> Companion Bundle Save:</span>
+                      <span className="flex items-center"><HeartHandshake className="w-3.5 h-3.5 mr-1" /> Bundle Discount:</span>
                       <span>-${bundleDiscount}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-spruce-500 border-t border-spruce-50 pt-1.5">
-                    <span>Artisan Wrapping & Shipping:</span>
-                    <span className="text-clay-accent font-semibold uppercase">COMPLIMENTARY</span>
+                    <span>Shipping:</span>
+                    <span className="text-clay-accent font-semibold uppercase">FREE</span>
                   </div>
                   <div className="flex justify-between text-sm text-spruce-950 font-bold font-sans pt-2 border-t border-spruce-100">
-                    <span>Total Investment:</span>
+                    <span>Total:</span>
                     <span className="font-serif text-lg font-extrabold">${grandTotal}</span>
                   </div>
                 </div>
 
                 {step === "review" && (
                   <button
-                    onClick={() => setStep("shipping")}
+                    onClick={() => {
+                      track("begin_checkout", { cartId: getCartId(), value: grandTotal });
+                      // Mark the persisted cart as having reached checkout.
+                      syncCart(
+                        cartItems.map((i) => ({
+                          productId: i.productId,
+                          name: i.name,
+                          colorway: i.colorway,
+                          price: i.price,
+                          quantity: i.quantity,
+                          configuration: i.configuration,
+                          imageUrl: i.imageUrl,
+                        })),
+                        "active",
+                        true,
+                      );
+                      setStep("shipping");
+                    }}
                     className="cursor-pointer w-full py-3.5 bg-clay-ochre text-clay-ink hover:bg-white hover:text-clay-ink hover:border-white font-semibold text-sm rounded-full transition-all duration-300 flex items-center justify-center space-x-2 shadow-md border border-clay-ochre group"
                   >
-                    <span>Proceed to Devotional Shipping</span>
+                    <span>Proceed to Shipping</span>
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
                   </button>
                 )}

@@ -9,10 +9,10 @@ export const PRODUCTS: PrayerMatProduct[] = [
   {
     id: "rawdah-ortho",
     name: "The Rawdah Orthopedic",
-    tagline: "Therapeutic Knee & Ankle Altar",
+    tagline: "Extra cushioning for knees and ankles",
     price: 185,
-    description: "Woven specifically for those seeking therapeutic comfort during prostration. The Rawdah Orthopedic utilizes a multi-layered, medical-grade memory foam core that absorbs prostration impacts, cradling the knees, ankles, and forehead in velvet-covered serenity.",
-    material: "Dual-Density Ergonomic Core & Premium Turkish Chenille Velvet",
+    description: "Made for comfort during prayer. The Rawdah Orthopedic has a multi-layer, medical-grade memory foam core that absorbs the impact when you kneel and prostrate, cushioning your knees, ankles, and forehead. The cover is soft Pakistani velvet.",
+    material: "Dual-Density Ergonomic Core & Premium Pakistani Chenille Velvet",
     thickness: "12mm (Orthopedic Cushioning)",
     stitchCount: "620,000 knots/sqm",
     dimensions: "120cm × 70cm (Full Stance)",
@@ -34,9 +34,9 @@ export const PRODUCTS: PrayerMatProduct[] = [
   {
     id: "silk-route",
     name: "The Silk Route Travel",
-    tagline: "Featherlight Sanctuary on the Move",
+    tagline: "Lightweight mat for travel",
     price: 145,
-    description: "Designed for the global seeker. The Silk Route is a whisper-thin, light-reflective travel mat woven from an exquisite organic silk-and-cotton blend. It rolls or folds into a compact sleeve, fitting seamlessly into carry-on luggage while offering a shimmering, tactile space wherever your journey pauses.",
+    description: "Made for travel. The Silk Route is a thin, lightweight mat woven from an organic silk-and-cotton blend. It rolls or folds into a compact sleeve and fits easily in carry-on luggage, so you can pray comfortably wherever you are.",
     material: "Artisan Mulberry Silk & Long-Staple Egyptian Cotton Blend",
     thickness: "3mm (Ultra-Portable flatweave)",
     stitchCount: "480,000 knots/sqm",
@@ -59,10 +59,10 @@ export const PRODUCTS: PrayerMatProduct[] = [
   {
     id: "andalusia-wool",
     name: "The Andalusia Flatweave",
-    tagline: "Infinite Geometric Grounding",
+    tagline: "Traditional wool flatweave",
     price: 210,
-    description: "A tribute to the mathematical marvels of Andalusian architecture. Hand-spun from 100% Anatolian mountain wool, this classic flatweave mat represents 'Tawhid' (Divine Unity) through its mesmerizing, infinite-star tessellations. Coated in natural lanolin, it provides thermal grounding and an organic texture that deepens with age.",
-    material: "100% Organic Hand-Spun Anatolian Wool",
+    description: "Hand-spun from 100% Pakistani mountain wool, this classic flatweave mat features traditional Islamic geometric star patterns inspired by Andalusian architecture. The natural lanolin in the wool helps it stay warm underfoot and resist dirt, and the texture only gets better with age.",
+    material: "100% Organic Hand-Spun Pakistani Wool",
     thickness: "8mm (Traditional flatweave Loom)",
     stitchCount: "Traditional hand-woven flatweave",
     dimensions: "125cm × 75cm (Spacious Premium)",
@@ -128,6 +128,6 @@ export const FAQS = [
   },
   {
     question: "Where are these mats manufactured?",
-    answer: "Our velvet and chenille fabrics are sourced from historic mills in Bursa, Turkey, while our orthopedic foam cores are engineered and assembled in our specialized workshop. Our wool mats are woven by hand by fair-trade family loom collectives in Anatolian villages, preserving a centuries-old cultural tradition."
+    answer: "Our velvet and chenille fabrics are sourced from established mills in Faisalabad, Pakistan, while our orthopedic foam cores are engineered and assembled in our specialized workshop. Our wool mats are woven by hand by fair-trade family weaving collectives in Pakistani villages, preserving a centuries-old cultural tradition."
   }
 ];

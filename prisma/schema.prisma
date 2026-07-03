@@ -1,0 +1,162 @@
+// Sujood analytics + commerce data model.
+// Change a model here, then run `npm run db:migrate -- --name <change>` to
+// generate + apply a migration. See README for the workflow.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// A visitor session — one row per browser (id persisted in localStorage).
+model Session {
+  id          String   @id
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  deviceType  String?  @map("device_type") // mobile | tablet | desktop | bot | unknown
+  browser     String?
+  os          String?
+  // location (best-effort: timezone/locale need no permission; lat/lng if granted)
+  country     String?
+  region      String?
+  city        String?
+  latitude    Float?
+  longitude   Float?
+  timezone    String?
+  locale      String?
+  // acquisition channel
+  referrer    String?
+  landingPage String?  @map("landing_page")
+  utmSource   String?  @map("utm_source")
+  utmMedium   String?  @map("utm_medium")
+  utmCampaign String?  @map("utm_campaign")
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt  DateTime @default(now()) @updatedAt @map("last_seen_at")
+
+  events Event[]
+  carts  Cart[]
+  orders Order[]
+
+  @@map("sessions")
+}
+
+/// The behavioral spine: every meaningful action lands here.
+model Event {
+  id          Int      @id @default(autoincrement())
+  sessionId   String?  @map("session_id")
+  session     Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  eventType   String   @map("event_type") // product_view, add_to_cart, begin_checkout, purchase, cart_abandoned, ...
+  productId   String?  @map("product_id")
+  productName String?  @map("product_name")
+  colorway    String?
+  quantity    Int?
+  unitPrice   Float?   @map("unit_price")
+  value       Float? // monetary value tied to this event
+  currency    String?  @default("USD")
+  cartId      String?  @map("cart_id")
+  orderId     String?  @map("order_id")
+  pageUrl     String?  @map("page_url")
+  // location snapshot so geo analytics survive even if the session is pruned
+  country     String?
+  city        String?
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([eventType])
+  @@index([sessionId])
+  @@index([productId])
+  @@index([createdAt])
+  @@map("events")
+}
+
+/// Persistent cart — lets us distinguish an abandoned cart from a converted one.
+model Cart {
+  id               String     @id
+  sessionId        String?    @map("session_id")
+  session          Session?   @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  status           String     @default("active") // active | abandoned | converted
+  itemCount        Int        @default(0) @map("item_count")
+  subtotal         Float      @default(0)
+  currency         String     @default("USD")
+  reachedCheckout  Boolean    @default(false) @map("reached_checkout")
+  convertedOrderId String?    @map("converted_order_id")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @default(now()) @updatedAt @map("updated_at")
+  abandonedAt      DateTime?  @map("abandoned_at")
+  convertedAt      DateTime?  @map("converted_at")
+
+  items CartItem[]
+
+  @@index([status])
+  @@index([sessionId])
+  @@map("carts")
+}
+
+model CartItem {
+  id            Int     @id @default(autoincrement())
+  cartId        String  @map("cart_id")
+  cart          Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId     String  @map("product_id")
+  name          String
+  colorway      String?
+  price         Float
+  quantity      Int
+  configuration Json?
+  imageUrl      String? @map("image_url")
+
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+/// Completed order, enriched with location + money breakdown.
+model Order {
+  id                String   @id
+  sessionId         String?  @map("session_id")
+  session           Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  cartId            String?  @map("cart_id")
+  customerName      String   @map("customer_name")
+  customerEmail     String   @map("customer_email")
+  address           String?
+  city              String?
+  region            String?
+  postalCode        String?  @map("postal_code")
+  country           String?
+  latitude          Float?
+  longitude         Float?
+  timezone          String?
+  ipAddress         String?  @map("ip_address")
+  subtotal          Float    @default(0)
+  discount          Float    @default(0)
+  total             Float
+  currency          String   @default("USD")
+  status            String   @default("PREPARING ON LOOM")
+  paymentStatus     String   @default("paid") @map("payment_status")
+  estimatedDelivery String?  @map("estimated_delivery")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  items OrderItem[]
+
+  @@index([customerEmail])
+  @@index([country])
+  @@index([sessionId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id            Int     @id @default(autoincrement())
+  orderId       String  @map("order_id")
+  order         Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId     String  @map("product_id")
+  name          String
+  colorway      String?
+  price         Float
+  quantity      Int
+  configuration Json?
+  imageUrl      String? @map("image_url")
+
+  @@index([orderId])
+  @@map("order_items")
+}

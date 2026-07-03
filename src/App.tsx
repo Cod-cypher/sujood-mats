@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ShoppingBag,
@@ -21,12 +21,43 @@ import { PRODUCTS, REVIEWS, FAQS } from "./data";
 import { CartItem } from "./types";
 import ProductCatalog from "./components/ProductCatalog";
 import Cart from "./components/Cart";
+import { initAnalytics, track, syncCart, getCartId } from "./analytics";
+
+// Maps CartItem[] to the backend cart snapshot shape.
+const toSyncItems = (items: CartItem[]) =>
+  items.map((i) => ({
+    productId: i.productId,
+    name: i.name,
+    colorway: i.colorway,
+    price: i.price,
+    quantity: i.quantity,
+    configuration: i.configuration,
+    imageUrl: i.imageUrl,
+  }));
 
 export default function App() {
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
+
+  // Keep a ref to the latest cart so the unload handler reads current contents.
+  const cartRef = useRef<CartItem[]>(cart);
+  cartRef.current = cart;
+
+  // Register the visitor session once, and flag the cart as abandoned on exit.
+  useEffect(() => {
+    initAnalytics();
+    const handleExit = () => {
+      const items = cartRef.current;
+      if (items.length > 0) {
+        syncCart(toSyncItems(items), "abandoned", false, true);
+        track("cart_abandoned", { cartId: getCartId(), value: items.reduce((a, i) => a + i.price * i.quantity, 0) }, true);
+      }
+    };
+    window.addEventListener("pagehide", handleExit);
+    return () => window.removeEventListener("pagehide", handleExit);
+  }, []);
 
   // Scroll helper
   const scrollToId = (id: string) => {
@@ -39,46 +70,82 @@ export default function App() {
   // Cart operations
   const handleAddToCart = (newItem: Omit<CartItem, "id">) => {
     setCart((prev) => {
+      let next: CartItem[];
       // If it's a standard mat and already exists in cart, increment quantity
       if (newItem.productId !== "custom") {
         const existingIdx = prev.findIndex(
           (item) => item.productId === newItem.productId && item.colorway === newItem.colorway
         );
         if (existingIdx > -1) {
-          const updated = [...prev];
-          updated[existingIdx].quantity += 1;
-          return updated;
+          next = prev.map((item, i) =>
+            i === existingIdx ? { ...item, quantity: item.quantity + 1 } : item
+          );
+          syncCart(toSyncItems(next));
+          return next;
         }
       }
-      
+
       // Otherwise, append as a fresh unique item
-      return [
+      next = [
         ...prev,
         {
           ...newItem,
           id: `cart-item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         },
       ];
+      syncCart(toSyncItems(next));
+      return next;
+    });
+    track("add_to_cart", {
+      productId: newItem.productId,
+      productName: newItem.name,
+      colorway: newItem.colorway,
+      quantity: 1,
+      unitPrice: newItem.price,
+      value: newItem.price,
+      cartId: getCartId(),
     });
     // Automatically reveal cart on adding for fluid transactional feedback
     setIsCartOpen(true);
   };
 
   const handleUpdateQuantity = (id: string, delta: number) => {
-    setCart((prev) =>
-      prev
-        .map((item) => {
-          if (item.id === id) {
-            const nextQty = item.quantity + delta;
-            return { ...item, quantity: Math.max(1, nextQty) };
-          }
-          return item;
-        })
-    );
+    setCart((prev) => {
+      const next = prev.map((item) =>
+        item.id === id ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item
+      );
+      const changed = next.find((i) => i.id === id);
+      if (changed) {
+        track("update_quantity", {
+          productId: changed.productId,
+          productName: changed.name,
+          quantity: changed.quantity,
+          unitPrice: changed.price,
+          cartId: getCartId(),
+        });
+      }
+      syncCart(toSyncItems(next));
+      return next;
+    });
   };
 
   const handleRemoveItem = (id: string) => {
-    setCart((prev) => prev.filter((item) => item.id !== id));
+    setCart((prev) => {
+      const removed = prev.find((i) => i.id === id);
+      const next = prev.filter((item) => item.id !== id);
+      if (removed) {
+        track("remove_from_cart", {
+          productId: removed.productId,
+          productName: removed.name,
+          colorway: removed.colorway,
+          quantity: removed.quantity,
+          unitPrice: removed.price,
+          cartId: getCartId(),
+        });
+      }
+      syncCart(toSyncItems(next));
+      return next;
+    });
   };
 
   const totalCartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
@@ -93,22 +160,27 @@ export default function App() {
           {/* Brand Serif Logo */}
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className="font-serif text-2xl font-bold tracking-widest text-spruce-950 focus:outline-hidden hover:opacity-90 transition-opacity"
+            className="flex items-center focus:outline-hidden hover:opacity-90 transition-opacity"
             id="logo-button"
+            aria-label="Sujood — back to top"
           >
-            S U J O O D
+            <img
+              src="/images/sujood_brand_logo_1783118318769.jpg"
+              alt="Sujood"
+              className="h-14 w-14 rounded-xl object-cover ring-1 ring-clay-ochre/25"
+            />
           </button>
 
           {/* Nav Links (Desktop) */}
           <nav className="hidden md:flex items-center space-x-8 text-xs font-mono tracking-wider text-spruce-600">
             <button onClick={() => scrollToId("catalog-section")} className="cursor-pointer hover:text-spruce-950 transition-colors">
-              THE LOOM COLLECTIONS
+              PRODUCTS
             </button>
             <button onClick={() => scrollToId("philosophy-section")} className="cursor-pointer hover:text-spruce-950 transition-colors">
-              PHILOSOPHY
+              WHY SUJOOD
             </button>
             <button onClick={() => scrollToId("reviews-section")} className="cursor-pointer hover:text-spruce-950 transition-colors">
-              HEIRLOOM VERDICTS
+              REVIEWS
             </button>
           </nav>
 
@@ -142,16 +214,16 @@ export default function App() {
           <div className="lg:col-span-7 space-y-8">
             <div className="flex items-center space-x-2 text-clay-accent">
               <Compass className="w-4.5 h-4.5" />
-              <span className="text-xs font-mono tracking-widest uppercase">DIRECTED DEVOTION & FOCUS</span>
+              <span className="text-xs font-mono tracking-widest uppercase">COMFORTABLE PRAYER MATS</span>
             </div>
 
             <h1 className="font-serif text-5xl sm:text-6xl lg:text-[72px] text-spruce-950 font-bold tracking-tight leading-none text-balance">
-              Sacred Spaces. <br />
-              <span className="font-serif font-medium text-clay-accent">Woven for Prostration.</span>
+              Prayer mats <br />
+              <span className="font-serif font-medium text-clay-accent">built for comfort.</span>
             </h1>
 
             <p className="text-base sm:text-lg text-spruce-700 leading-relaxed max-w-[65ch] text-pretty">
-              Every prostration is an absolute grounding. Sujood weaves therapeutic orthopedic memory mats, organic Anatolian wool flatweaves, and shimmery travel silken sanctuaries designed to absorb posture impact and direct the seeker’s infinite sight.
+              Sujood makes prayer mats that are comfortable to use every day: orthopedic memory-foam mats for joint support, organic Pakistani wool flatweaves, and lightweight silk mats for travel.
             </p>
 
             <div className="flex flex-wrap gap-4 pt-4">
@@ -159,7 +231,7 @@ export default function App() {
                 onClick={() => scrollToId("catalog-section")}
                 className="cursor-pointer px-8 py-4 bg-spruce-950 text-alabaster-pearl hover:bg-spruce-900 font-semibold text-sm rounded-full transition-all duration-300 shadow-md border border-spruce-950"
               >
-                Explore Loom Collection
+                Shop the Collection
               </button>
             </div>
 
@@ -171,7 +243,7 @@ export default function App() {
               </div>
               <div className="space-y-1">
                 <span className="text-xs font-mono text-spruce-400">HERITAGE</span>
-                <p className="text-sm font-semibold text-spruce-950">Anatolian Loom</p>
+                <p className="text-sm font-semibold text-spruce-950">Pakistani Wool</p>
               </div>
               <div className="space-y-1">
                 <span className="text-xs font-mono text-spruce-400">PORTABLE</span>
@@ -186,14 +258,14 @@ export default function App() {
             <div className="relative overflow-hidden rounded-3xl border border-spruce-100 shadow-xl aspect-3/4">
               <img
                 src="/images/rawdah_mat_1782347244248.jpg"
-                alt="Sujood Premium Orthopedic Devotional Altar"
+                alt="The Rawdah Orthopedic prayer mat"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover hover:scale-[1.03] transition-transform duration-[4000ms] ease-out"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-spruce-950/40 via-transparent to-transparent pointer-events-none" />
               <div className="absolute bottom-6 left-6 text-alabaster-pearl space-y-1">
-                <p className="text-[10px] font-mono tracking-widest text-clay-ochre">FEATURED MASTERPIECE</p>
-                <h4 className="font-serif text-lg font-medium">The Rawdah Orthopedic in Spruce Green</h4>
+                <p className="text-[10px] font-mono tracking-widest text-clay-ochre">FEATURED</p>
+                <h4 className="font-serif text-lg font-medium">The Rawdah Orthopedic in Royal Emerald</h4>
               </div>
             </div>
           </div>
@@ -205,12 +277,12 @@ export default function App() {
       <section className="py-24 bg-spruce-50 border-b border-spruce-100/40" id="philosophy-section">
         <div className="max-w-7xl mx-auto px-6">
           <div className="max-w-3xl space-y-4 mb-20">
-            <span className="text-[10px] font-mono tracking-widest text-clay-accent uppercase">TACTILE THEOLOGY</span>
+            <span className="text-[10px] font-mono tracking-widest text-clay-accent uppercase">WHY SUJOOD</span>
             <h2 className="font-serif text-3xl sm:text-4xl text-spruce-950 font-bold tracking-tight">
-              An Elevated Sanctuary for the Forehead, Knees, and Mind
+              Designed to be comfortable where it matters
             </h2>
             <p className="text-sm text-spruce-700 leading-relaxed text-pretty max-w-prose">
-              Sujood was born from a search for physical comfort and deep geometric focus. We choose wool, silk, and medical-grade cellular structures to enhance the tranquility of the daily prayers.
+              We started Sujood to make prayer mats that are actually comfortable to use. We use wool, silk, and medical-grade foam so your knees, ankles, and forehead are supported during daily prayers.
             </p>
           </div>
 
@@ -221,9 +293,9 @@ export default function App() {
               <div className="w-12 h-12 bg-spruce-50 border border-spruce-100 text-spruce-800 rounded-lg flex items-center justify-center font-serif text-lg font-bold">
                 A
               </div>
-              <h4 className="font-serif text-lg font-semibold text-spruce-950">Dual-Density Joint Altar</h4>
+              <h4 className="font-serif text-lg font-semibold text-spruce-950">Joint Support</h4>
               <p className="text-xs text-spruce-700 leading-relaxed text-pretty">
-                Standard rugs transfer floor hardness directly to the joints. Our orthopedic core utilizes dense supportive foam that cradles the contact bone groups, preventing stiffness and allowing deep, unhurried devotions.
+                A regular rug passes the hardness of the floor straight to your joints. Our orthopedic foam core cushions your knees, ankles, and forehead so you can pray without stiffness or pain.
               </p>
               <div className="flex items-center space-x-1.5 text-xs font-mono text-clay-accent">
                 <CornerDownRight className="w-3.5 h-3.5" />
@@ -235,13 +307,13 @@ export default function App() {
               <div className="w-12 h-12 bg-spruce-50 border border-spruce-100 text-spruce-800 rounded-lg flex items-center justify-center font-serif text-lg font-bold">
                 B
               </div>
-              <h4 className="font-serif text-lg font-semibold text-spruce-950">Infinite Sacred Tessellations</h4>
+              <h4 className="font-serif text-lg font-semibold text-spruce-950">Traditional Patterns</h4>
               <p className="text-xs text-spruce-700 leading-relaxed text-pretty">
-                By celebrating traditional geometric star tiles (Tawhid), we provide structural focus during sight-cast. The visual order represents natural creation, guiding internal alignment.
+                Our mats feature traditional Islamic geometric patterns and mihrab arch designs, woven with care to give you something calm and focused to look at during prayer.
               </p>
               <div className="flex items-center space-x-1.5 text-xs font-mono text-clay-accent">
                 <CornerDownRight className="w-3.5 h-3.5" />
-                <span>Star structures & focal Arches</span>
+                <span>Geometric patterns & arch designs</span>
               </div>
             </div>
 
@@ -249,13 +321,13 @@ export default function App() {
               <div className="w-12 h-12 bg-spruce-50 border border-spruce-100 text-spruce-800 rounded-lg flex items-center justify-center font-serif text-lg font-bold">
                 C
               </div>
-              <h4 className="font-serif text-lg font-semibold text-spruce-950">Self-Cleaning Mountain Yarn</h4>
+              <h4 className="font-serif text-lg font-semibold text-spruce-950">Easy-Care Wool</h4>
               <p className="text-xs text-spruce-700 leading-relaxed text-pretty">
-                Anatolian wool retains natural lanolin grease, pushing away ambient dust and household lint automatically. It adapts to cold ceramic or hot concrete surfaces effortlessly.
+                Pakistani wool has natural lanolin that helps it resist dust and lint, so it stays clean with little effort. It also feels good on both cold tile and warm floors.
               </p>
               <div className="flex items-center space-x-1.5 text-xs font-mono text-clay-accent">
                 <CornerDownRight className="w-3.5 h-3.5" />
-                <span>100% hand-spun Anatolian wool</span>
+                <span>100% hand-spun Pakistani wool</span>
               </div>
             </div>
 
@@ -266,10 +338,10 @@ export default function App() {
       {/* 4. MAGAZINE ALTERNATING CATALOG */}
       <section className="py-24 max-w-7xl mx-auto px-6">
         <div className="max-w-2xl space-y-4 mb-20 text-center mx-auto">
-          <span className="text-[10px] font-mono tracking-widest text-clay-accent uppercase">CURATED LOOMS</span>
-          <h2 className="font-serif text-3xl sm:text-4xl text-spruce-950 font-bold tracking-tight">The Sujood Signature Gallery</h2>
+          <span className="text-[10px] font-mono tracking-widest text-clay-accent uppercase">OUR PRODUCTS</span>
+          <h2 className="font-serif text-3xl sm:text-4xl text-spruce-950 font-bold tracking-tight">Shop Prayer Mats</h2>
           <p className="text-xs text-spruce-500 font-mono tracking-wider">
-            PREMIUM CRAFTSMANSHIP • LIFETIME WARRANTY ON ALL EDGES
+            QUALITY MATERIALS • LIFETIME WARRANTY ON EDGES
           </p>
         </div>
 
@@ -281,9 +353,9 @@ export default function App() {
       {/* 6. VERIFIED HEIRLOOM VERDICTS */}
       <section className="py-24 max-w-7xl mx-auto px-6" id="reviews-section">
         <div className="max-w-3xl space-y-4 mb-16">
-          <span className="text-[10px] font-mono tracking-widest text-clay-accent uppercase">SEEKERS' ACCOUNTABLE VERDICTS</span>
+          <span className="text-[10px] font-mono tracking-widest text-clay-accent uppercase">REVIEWS</span>
           <h2 className="font-serif text-3xl sm:text-4xl text-spruce-950 font-bold tracking-tight">
-            Heirloom Testimonials from Daily Practice
+            What Our Customers Say
           </h2>
         </div>
 
@@ -326,8 +398,8 @@ export default function App() {
       <section className="py-24 bg-alabaster-pearl border-t border-spruce-100/40" id="faq-section">
         <div className="max-w-4xl mx-auto px-6">
           <div className="text-center space-y-4 mb-16">
-            <span className="text-[10px] font-mono tracking-widest text-clay-accent uppercase">FAQ PROTOCOLS</span>
-            <h2 className="font-serif text-3xl text-spruce-950 font-bold tracking-tight">Common Contemplations</h2>
+            <span className="text-[10px] font-mono tracking-widest text-clay-accent uppercase">FAQ</span>
+            <h2 className="font-serif text-3xl text-spruce-950 font-bold tracking-tight">Frequently Asked Questions</h2>
           </div>
 
           <div className="space-y-4 border-t border-spruce-100">
@@ -375,7 +447,7 @@ export default function App() {
           <div className="md:col-span-4 space-y-4 text-center md:text-left">
             <h4 className="font-serif text-xl font-bold tracking-widest">S U J O O D</h4>
             <p className="text-[11px] text-spruce-300 leading-relaxed max-w-xs">
-              Hand-spun Anatolian looms, Orthopedic devotions, and fold-resistant travel sanctuaries designed to direct sensory focus during prostration.
+              Comfortable prayer mats: orthopedic memory foam, hand-spun Pakistani wool, and lightweight silk mats for travel.
             </p>
           </div>
 
@@ -383,24 +455,23 @@ export default function App() {
             <div className="space-y-3">
               <h5 className="text-[10px] text-clay-ochre font-semibold tracking-wider">NAVIGATE</h5>
               <div className="flex flex-col space-y-2">
-                <button onClick={() => scrollToId("catalog-section")} className="cursor-pointer hover:text-clay-ochre text-left transition-colors">Collections</button>
-                <button onClick={() => scrollToId("philosophy-section")} className="cursor-pointer hover:text-clay-ochre text-left transition-colors">Weave Philosophy</button>
+                <button onClick={() => scrollToId("catalog-section")} className="cursor-pointer hover:text-clay-ochre text-left transition-colors">Products</button>
+                <button onClick={() => scrollToId("philosophy-section")} className="cursor-pointer hover:text-clay-ochre text-left transition-colors">Why Sujood</button>
               </div>
             </div>
 
             <div className="space-y-3">
-              <h5 className="text-[10px] text-clay-ochre font-semibold tracking-wider">COVENANT</h5>
+              <h5 className="text-[10px] text-clay-ochre font-semibold tracking-wider">OUR PROMISE</h5>
               <div className="flex flex-col space-y-2">
-                <span className="text-spruce-400">Fair Trade Looms</span>
-                <span className="text-spruce-400">Lifetime Bound Edge</span>
-                <span className="text-spruce-400">Bursa Velvet Mills</span>
+                <span className="text-spruce-400">Fair Trade Sourcing</span>
+                <span className="text-spruce-400">Lifetime Edge Warranty</span>
               </div>
             </div>
           </div>
 
           <div className="md:col-span-3 text-center md:text-right text-[10px] font-mono text-spruce-400 space-y-1">
-            <p>&copy; 2026 Sujood Prayer Sanctuary.</p>
-            <p>Made for daily devotions.</p>
+            <p>&copy; 2026 Sujood.</p>
+            <p>Prayer mats made for everyday comfort.</p>
           </div>
 
         </div>

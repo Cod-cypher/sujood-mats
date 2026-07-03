@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Sujood">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E4C6A2"/>
+      <stop offset="0.55" stop-color="#D5B28D"/>
+      <stop offset="1" stop-color="#B8926B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Badge background -->
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="#0D1110"/>
+  <rect x="3" y="3" width="58" height="58" rx="14" fill="none" stroke="#C5A27D" stroke-opacity="0.4" stroke-width="1.5"/>
+
+  <!-- Mihrab arch (the prayer-niche silhouette) -->
+  <path d="M20 51 L20 29 Q20 13.5 32 9.5 Q44 13.5 44 29 L44 51 Z"
+        fill="none" stroke="url(#gold)" stroke-width="3.4" stroke-linejoin="round"/>
+
+  <!-- Ground line beneath the arch -->
+  <rect x="16.5" y="50.5" width="31" height="3.4" rx="1.7" fill="url(#gold)"/>
+
+  <!-- 8-point khatam star (two overlapping squares) -->
+  <g fill="url(#gold)">
+    <rect x="26" y="24" width="12" height="12" rx="1.6"/>
+    <rect x="26" y="24" width="12" height="12" rx="1.6" transform="rotate(45 32 30)"/>
+  </g>
+</svg>

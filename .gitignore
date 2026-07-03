@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Prisma generated client
+/node_modules/.prisma
+/generated

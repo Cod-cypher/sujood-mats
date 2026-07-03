@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { ArrowUpRight, Activity, Globe, Feather, Check, ShoppingBag, Eye } from "lucide-react";
 import { PRODUCTS } from "../data";
 import { CartItem } from "../types";
+import { track } from "../analytics";
 
 interface ProductCatalogProps {
   onAddToCart: (item: Omit<CartItem, "id">) => void;
@@ -22,6 +23,30 @@ export default function ProductCatalog({ onAddToCart }: ProductCatalogProps) {
   });
 
   const [addedProductId, setAddedProductId] = useState<string | null>(null);
+
+  // Fire a single product_view per product when it first scrolls into view.
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const viewedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const pid = entry.target.getAttribute("data-product-id");
+          if (entry.isIntersecting && pid && !viewedRef.current.has(pid)) {
+            viewedRef.current.add(pid);
+            const product = PRODUCTS.find((p) => p.id === pid);
+            track("product_view", { productId: pid, productName: product?.name, unitPrice: product?.price });
+          }
+        }
+      },
+      { threshold: 0.4 }
+    );
+    const els = Object.values(sectionRefs.current) as (HTMLDivElement | null)[];
+    for (const el of els) {
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, []);
 
   const handleColorSelect = (productId: string, idx: number) => {
     setSelectedColors((prev) => ({ ...prev, [productId]: idx }));
@@ -55,6 +80,8 @@ export default function ProductCatalog({ onAddToCart }: ProductCatalogProps) {
         return (
           <div
             key={p.id}
+            ref={(el) => { sectionRefs.current[p.id] = el; }}
+            data-product-id={p.id}
             className={`grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-center`}
             id={`product-${p.id}`}
           >
@@ -106,7 +133,7 @@ export default function ProductCatalog({ onAddToCart }: ProductCatalogProps) {
               <div className="space-y-3">
                 <div className="flex items-baseline space-x-2">
                   <span className="font-serif text-3xl font-bold text-spruce-950">${p.price}</span>
-                  <span className="text-xs text-spruce-500 font-sans">USD | Perpetual Ownership</span>
+                  <span className="text-xs text-spruce-500 font-sans">USD</span>
                 </div>
                 <p className="text-sm text-spruce-700 font-sans leading-relaxed text-pretty max-w-prose">
                   {p.description}
@@ -115,7 +142,7 @@ export default function ProductCatalog({ onAddToCart }: ProductCatalogProps) {
 
               {/* Technical Specifications (Monospace formatting for authenticity) */}
               <div className="p-5 bg-spruce-850/50 border border-spruce-200 rounded-xl space-y-3 shadow-xs">
-                <p className="text-[10px] font-mono tracking-wider text-clay-ochre uppercase">SPECIFICATIONS PROTOCOL</p>
+                <p className="text-[10px] font-mono tracking-wider text-clay-ochre uppercase">SPECIFICATIONS</p>
                 <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-xs font-mono">
                   <div>
                     <span className="text-spruce-400">MATERIAL:</span>
@@ -135,7 +162,7 @@ export default function ProductCatalog({ onAddToCart }: ProductCatalogProps) {
               {/* Colorway & Option Selectors */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono text-spruce-500">SELECTED WEFT: <span className="text-spruce-900 font-semibold uppercase">{activeColorway.name}</span></span>
+                  <span className="text-xs font-mono text-spruce-500">COLOR: <span className="text-spruce-900 font-semibold uppercase">{activeColorway.name}</span></span>
                 </div>
                 <div className="flex items-center space-x-2">
                   {p.colorways.map((c, cIdx) => (
@@ -171,12 +198,12 @@ export default function ProductCatalog({ onAddToCart }: ProductCatalogProps) {
                   {addedProductId === p.id ? (
                     <>
                       <Check className="w-4 h-4 animate-bounce" />
-                      <span>Added to Sanctuary</span>
+                      <span>Added to Cart</span>
                     </>
                   ) : (
                     <>
                       <ShoppingBag className="w-4 h-4" />
-                      <span>Secure Heirloom Build</span>
+                      <span>Add to Cart</span>
                     </>
                   )}
                 </button>

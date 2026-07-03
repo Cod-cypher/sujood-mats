@@ -1,6 +1,6 @@
 {
-  "name": "Sujood - Artisan Prayer Mats",
-  "description": "An elegant, sensory e-commerce experience for Sujood, offering premium hand-woven, orthopedic, and modern geometric Islamic prayer mats with an interactive customizer and AI artisan guide.",
+  "name": "Sujood - Prayer Mats",
+  "description": "An online store for Sujood prayer mats: orthopedic memory-foam, hand-woven Pakistani wool, and lightweight silk travel mats.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
