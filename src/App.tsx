@@ -14,7 +14,9 @@ import {
   ChevronDown,
   Compass,
   CornerDownRight,
-  Bookmark
+  Bookmark,
+  Menu,
+  X
 } from "lucide-react";
 
 import { PRODUCTS, REVIEWS, FAQS } from "./data";
@@ -39,6 +41,7 @@ export default function App() {
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
 
   // Keep a ref to the latest cart so the unload handler reads current contents.
@@ -184,6 +187,9 @@ export default function App() {
             <button onClick={() => scrollToId("reviews-section")} className="cursor-pointer hover:text-spruce-950 transition-colors">
               REVIEWS
             </button>
+            <a href="/prayer-mat-guide/" className="cursor-pointer hover:text-spruce-950 transition-colors">
+              GUIDES
+            </a>
           </nav>
 
           {/* Action Hub */}
@@ -204,8 +210,39 @@ export default function App() {
               )}
             </button>
 
+            {/* Mobile menu toggle */}
+            <button
+              onClick={() => setIsMenuOpen((v) => !v)}
+              className="md:hidden cursor-pointer p-2.5 bg-spruce-800 text-spruce-950 hover:bg-spruce-200 rounded-full transition-all duration-200 border border-spruce-100 flex items-center justify-center"
+              id="mobile-menu-trigger"
+              aria-label="Toggle menu"
+              aria-expanded={isMenuOpen}
+            >
+              {isMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
+
           </div>
         </div>
+
+        {/* Mobile Nav Panel */}
+        {isMenuOpen && (
+          <div className="md:hidden border-t border-spruce-100/60 bg-alabaster-pearl/95 backdrop-blur-md">
+            <nav className="max-w-7xl mx-auto px-6 py-4 flex flex-col space-y-4 text-xs font-mono tracking-wider text-spruce-600">
+              <button onClick={() => { scrollToId("catalog-section"); setIsMenuOpen(false); }} className="text-left hover:text-spruce-950 transition-colors">
+                PRODUCTS
+              </button>
+              <button onClick={() => { scrollToId("philosophy-section"); setIsMenuOpen(false); }} className="text-left hover:text-spruce-950 transition-colors">
+                WHY SUJOOD
+              </button>
+              <button onClick={() => { scrollToId("reviews-section"); setIsMenuOpen(false); }} className="text-left hover:text-spruce-950 transition-colors">
+                REVIEWS
+              </button>
+              <a href="/prayer-mat-guide/" className="hover:text-spruce-950 transition-colors">
+                GUIDES
+              </a>
+            </nav>
+          </div>
+        )}
       </header>
 
       {/* 2. DRAMATIC EDITORIAL HERO SECTION */}
