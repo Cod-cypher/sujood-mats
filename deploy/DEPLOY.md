@@ -1,10 +1,10 @@
 # Deploying Sujood (single server on Ubuntu)
 
-Everything runs on your Ubuntu box (`167.233.120.70`) behind Caddy:
+Everything runs on your Ubuntu box (`167.233.120.70`) behind Nginx:
 
 ```
-Browser ──HTTPS──> sujoodmats.com ──> Caddy (auto HTTPS) ──> Express :3001
-                                                                │
+Browser ──HTTPS──> sujoodmats.com ──> Nginx (TLS via certbot) ──> Express :3001
+                                                                     │
                                           serves the built frontend (dist/)
                                           AND the /api/* routes  ──> PostgreSQL
 ```
@@ -22,24 +22,21 @@ one deploy. The Express server serves the built frontend in production mode.
 | A    | `www` | `167.233.120.70` |
 
 Check propagation: `dig sujoodmats.com +short` should return `167.233.120.70`.
-Do this first — Caddy can't get an HTTPS certificate until DNS points at the server.
+Do this first — certbot can't issue an HTTPS certificate until DNS points at the server.
 
 ---
 
-## 2. Install Node.js 20 and Caddy
+## 2. Install Node.js 20
 
-SSH into the server as a sudo user:
+SSH into the server as a sudo user. (Nginx is already installed on your box.)
 
 ```bash
 # Node.js 20 + git
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs git
 
-# Caddy (auto-HTTPS reverse proxy)
-sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-sudo apt-get update && sudo apt-get install -y caddy
+# certbot for Let's Encrypt (nginx plugin)
+sudo apt-get install -y certbot python3-certbot-nginx
 ```
 
 ---
@@ -67,7 +64,7 @@ EOF
 ```
 
 - `PORT=3001` because port 3000 is already used by another app on this server.
-  Caddy proxies to this same port (see `deploy/Caddyfile`) — keep them in sync.
+  Nginx proxies to this same port (see `deploy/nginx-sujood.conf`) — keep them in sync.
 - The DB is on the same box, so `localhost` works.
 - `CORS_ORIGIN` is **not needed** here (same origin). Leave it out.
 - Add `GEMINI_API_KEY="..."` if you want the AI advisor live; otherwise it runs in
@@ -127,15 +124,27 @@ Handy PM2 commands: `pm2 restart sujood`, `pm2 stop sujood`, `pm2 logs sujood`,
 
 ---
 
-## 7. Put Caddy in front (HTTPS)
+## 7. Put Nginx in front (HTTPS)
+
+Add the app's server block and enable it:
 
 ```bash
-sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
-sudo systemctl reload caddy
-journalctl -u caddy -f                # watch it fetch the certificate
+sudo cp deploy/nginx-sujood.conf /etc/nginx/sites-available/sujoodmats.conf
+sudo ln -s /etc/nginx/sites-available/sujoodmats.conf /etc/nginx/sites-enabled/
+sudo nginx -t                         # test config — must say "syntax is ok"
+sudo systemctl reload nginx
 ```
 
-Caddy gets a Let's Encrypt cert for `sujoodmats.com` automatically (DNS must resolve first).
+Now the site is reachable on HTTP. Get a Let's Encrypt certificate — certbot edits the
+nginx config to add HTTPS, sets up the HTTP→HTTPS redirect, and auto-renews:
+
+```bash
+sudo certbot --nginx -d sujoodmats.com -d www.sujoodmats.com
+```
+
+- When asked, choose to **redirect HTTP to HTTPS**.
+- Renewal is automatic (a systemd timer runs `certbot renew`). Test it with
+  `sudo certbot renew --dry-run`.
 
 Then from your laptop:
 
@@ -156,7 +165,7 @@ sudo ufw allow 443
 sudo ufw enable
 ```
 
-Port 3001 stays internal (only Caddy talks to it). Postgres (5432) connects over
+Port 3001 stays internal (only Nginx talks to it). Postgres (5432) connects over
 localhost, so it doesn't need to be exposed publicly.
 
 ---
@@ -177,9 +186,11 @@ pm2 restart sujood
 ## Troubleshooting
 
 - **Certificate not issued / site not HTTPS:** DNS for `sujoodmats.com` must resolve to
-  `167.233.120.70` before Caddy can get a cert. `journalctl -u caddy -f` shows the ACME process.
-- **502 Bad Gateway from Caddy:** the app isn't running on :3001, or the Caddyfile port
-  doesn't match `PORT` in `.env`. Check `pm2 status` and `pm2 logs sujood`.
+  `167.233.120.70` before certbot can issue a cert. Re-run `sudo certbot --nginx -d sujoodmats.com -d www.sujoodmats.com`
+  and read its output. Also make sure ports 80/443 are open in the firewall.
+- **502 Bad Gateway from Nginx:** the app isn't running on :3001, or the `proxy_pass` port
+  in the nginx config doesn't match `PORT` in `.env`. Check `pm2 status` and `pm2 logs sujood`,
+  and `sudo tail -f /var/log/nginx/error.log`.
 - **App won't start / DB errors:** verify `DATABASE_URL` in `/opt/sujood-mats/.env` and that
   Postgres is running (`sudo systemctl status postgresql`). Re-run `npm run db:deploy`.
   See the crash reason with `pm2 logs sujood --err`.
