@@ -1,0 +1,54 @@
+/* Shared styles for Sujood guide/content pages. */
+:root {
+  --bg: #0d1110;
+  --panel: #121715;
+  --border: #1e2523;
+  --text: #e5e5e0;
+  --muted: #9aa8a4;
+  --gold: #c5a27d;
+  --gold-bright: #d5b28d;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.7;
+}
+a { color: var(--gold-bright); }
+.wrap { max-width: 760px; margin: 0 auto; padding: 24px; }
+header.site {
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: rgba(13, 17, 16, 0.9);
+  backdrop-filter: blur(8px);
+}
+header.site .wrap { display: flex; align-items: center; gap: 12px; padding: 14px 24px; }
+header.site img { width: 40px; height: 40px; border-radius: 10px; }
+header.site .brand { font-weight: 700; letter-spacing: 0.15em; }
+header.site .spacer { flex: 1; }
+.btn {
+  display: inline-block; background: var(--gold); color: #0d1110;
+  padding: 10px 18px; border-radius: 999px; text-decoration: none; font-weight: 600;
+}
+.btn:hover { background: var(--gold-bright); }
+h1 { font-family: Georgia, "Times New Roman", serif; font-size: 2.1rem; line-height: 1.2; margin: 8px 0 4px; }
+h2 { font-family: Georgia, serif; font-size: 1.5rem; margin: 40px 0 8px; color: #f5f5f0; }
+h3 { font-size: 1.15rem; margin: 24px 0 6px; }
+.lede { color: var(--muted); font-size: 1.1rem; }
+.kicker { color: var(--gold); font-size: 0.75rem; letter-spacing: 0.2em; text-transform: uppercase; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin: 18px 0; }
+ul { padding-left: 20px; }
+details { border-bottom: 1px solid var(--border); padding: 14px 0; }
+summary { cursor: pointer; font-weight: 600; color: #f5f5f0; }
+details p { color: var(--muted); }
+footer.site { border-top: 1px solid var(--border); margin-top: 48px; color: var(--muted); font-size: 0.85rem; }
+.cta { text-align: center; margin: 40px 0; }
+img.inline { max-width: 100%; border-radius: 12px; border: 1px solid var(--border); }
+.related { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+.related a {
+  flex: 1 1 200px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 16px; text-decoration: none; color: var(--text);
+}
+.related a:hover { border-color: var(--gold); }
+.related a strong { color: var(--gold-bright); display: block; margin-bottom: 2px; }

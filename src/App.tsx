@@ -165,8 +165,10 @@ export default function App() {
             aria-label="Sujood — back to top"
           >
             <img
-              src="/images/sujood_brand_logo_1783118318769.jpg"
+              src="/images/logo-128.webp"
               alt="Sujood"
+              width="56"
+              height="56"
               className="h-14 w-14 rounded-xl object-cover ring-1 ring-clay-ochre/25"
             />
           </button>
@@ -457,6 +459,7 @@ export default function App() {
               <div className="flex flex-col space-y-2">
                 <button onClick={() => scrollToId("catalog-section")} className="cursor-pointer hover:text-clay-ochre text-left transition-colors">Products</button>
                 <button onClick={() => scrollToId("philosophy-section")} className="cursor-pointer hover:text-clay-ochre text-left transition-colors">Why Sujood</button>
+                <a href="/prayer-mat-guide/" className="hover:text-clay-ochre text-left transition-colors">Buying Guide</a>
               </div>
             </div>
 

@@ -3,12 +3,117 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/jpeg" href="/images/sujood_brand_logo_1783118318769.jpg" />
-    <title>Sujood — Comfortable Prayer Mats</title>
+    <link rel="icon" type="image/png" href="/favicon-64.png" />
+
+    <!-- Primary SEO -->
+    <title>Sujood Mats | Buy Comfortable Prayer Mats Online</title>
+    <meta
+      name="description"
+      content="Buy Sujood prayer mats online — orthopedic memory-foam, hand-woven wool, and lightweight silk travel mats. Comfortable prayer mats built for daily prayer, with free shipping."
+    />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#0D1110" />
+    <link rel="canonical" href="https://sujoodmats.com/" />
+
+    <!-- Open Graph (link previews on WhatsApp, Facebook, LinkedIn, etc.) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Sujood Mats" />
+    <meta property="og:title" content="Sujood Mats | Buy Comfortable Prayer Mats Online" />
+    <meta
+      property="og:description"
+      content="Orthopedic memory-foam, hand-woven wool, and lightweight silk prayer mats built for daily prayer. Free shipping."
+    />
+    <meta property="og:url" content="https://sujoodmats.com/" />
+    <meta property="og:image" content="https://sujoodmats.com/images/logo-og.jpg" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Sujood Mats | Buy Comfortable Prayer Mats Online" />
+    <meta
+      name="twitter:description"
+      content="Orthopedic memory-foam, hand-woven wool, and lightweight silk prayer mats built for daily prayer."
+    />
+    <meta name="twitter:image" content="https://sujoodmats.com/images/logo-og.jpg" />
+
+    <!-- Structured data: helps Google understand the brand and products.
+         Keep prices/availability in sync with src/data.ts. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://sujoodmats.com/#organization",
+            "name": "Sujood Mats",
+            "url": "https://sujoodmats.com/",
+            "logo": "https://sujoodmats.com/images/logo-og.jpg",
+            "description": "Comfortable prayer mats: orthopedic memory-foam, hand-woven wool, and lightweight silk travel mats."
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://sujoodmats.com/#website",
+            "url": "https://sujoodmats.com/",
+            "name": "Sujood Mats",
+            "publisher": { "@id": "https://sujoodmats.com/#organization" }
+          },
+          {
+            "@type": "Product",
+            "name": "The Rawdah Orthopedic Prayer Mat",
+            "image": "https://sujoodmats.com/images/rawdah_mat_1782347244248.jpg",
+            "description": "Orthopedic memory-foam prayer mat with a 12mm dual-density core that cushions the knees, ankles, and forehead during prayer.",
+            "brand": { "@type": "Brand", "name": "Sujood Mats" },
+            "offers": {
+              "@type": "Offer",
+              "url": "https://sujoodmats.com/#product-rawdah-ortho",
+              "priceCurrency": "USD",
+              "price": "185",
+              "availability": "https://schema.org/InStock"
+            }
+          },
+          {
+            "@type": "Product",
+            "name": "The Silk Route Travel Prayer Mat",
+            "image": "https://sujoodmats.com/images/silk_route_mat_1782347264817.jpg",
+            "description": "Lightweight silk-and-cotton travel prayer mat that folds flat for carry-on luggage.",
+            "brand": { "@type": "Brand", "name": "Sujood Mats" },
+            "offers": {
+              "@type": "Offer",
+              "url": "https://sujoodmats.com/#product-silk-route",
+              "priceCurrency": "USD",
+              "price": "145",
+              "availability": "https://schema.org/InStock"
+            }
+          },
+          {
+            "@type": "Product",
+            "name": "The Andalusia Flatweave Prayer Mat",
+            "image": "https://sujoodmats.com/images/andalusia_mat_1782347287649.jpg",
+            "description": "Hand-spun 100% wool flatweave prayer mat with traditional Islamic geometric star patterns.",
+            "brand": { "@type": "Brand", "name": "Sujood Mats" },
+            "offers": {
+              "@type": "Offer",
+              "url": "https://sujoodmats.com/#product-andalusia-wool",
+              "priceCurrency": "USD",
+              "price": "210",
+              "availability": "https://schema.org/InStock"
+            }
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <!-- Content for crawlers/users before the app's JavaScript loads. -->
+    <noscript>
+      <h1>Sujood Mats — Comfortable Prayer Mats</h1>
+      <p>
+        Buy Sujood prayer mats online: orthopedic memory-foam, hand-woven wool, and
+        lightweight silk travel mats built for comfort during daily prayer.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
