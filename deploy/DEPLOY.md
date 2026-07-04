@@ -95,15 +95,35 @@ kill %1
 
 ---
 
-## 6. Run it with systemd (keeps it alive, restarts on boot)
+## 6. Run it with PM2 (keeps it alive, restarts on boot)
+
+Install PM2 once, globally:
 
 ```bash
-sudo cp deploy/sujood-api.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now sujood-api
-sudo systemctl status sujood-api      # should be "active (running)"
-journalctl -u sujood-api -f           # live logs (Ctrl-C to stop watching)
+sudo npm install -g pm2
 ```
+
+Start the app from the repo root (the `ecosystem.config.cjs` sets `NODE_ENV=production`
+and `PORT=3001`):
+
+```bash
+cd /opt/sujood-mats
+pm2 start ecosystem.config.cjs
+pm2 status                 # the "sujood" app should show "online"
+pm2 logs sujood            # live logs (Ctrl-C to stop watching)
+```
+
+Make it survive reboots:
+
+```bash
+pm2 save                   # remember the current process list
+pm2 startup                # prints a `sudo env ... systemctl enable ...` line
+# copy/paste and run that exact line, then:
+pm2 save
+```
+
+Handy PM2 commands: `pm2 restart sujood`, `pm2 stop sujood`, `pm2 logs sujood`,
+`pm2 monit`. Run PM2 as the same user each time (e.g. whoever you're logged in as).
 
 ---
 
@@ -145,11 +165,11 @@ localhost, so it doesn't need to be exposed publicly.
 
 ```bash
 cd /opt/sujood-mats
-sudo -u sujood git pull
-sudo -u sujood npm ci
-sudo -u sujood npm run db:deploy      # only does something if migrations changed
-sudo -u sujood npm run build
-sudo systemctl restart sujood-api
+git pull
+npm ci
+npm run db:deploy      # only does something if migrations changed
+npm run build
+pm2 restart sujood
 ```
 
 ---
@@ -159,12 +179,12 @@ sudo systemctl restart sujood-api
 - **Certificate not issued / site not HTTPS:** DNS for `sujoodmats.com` must resolve to
   `167.233.120.70` before Caddy can get a cert. `journalctl -u caddy -f` shows the ACME process.
 - **502 Bad Gateway from Caddy:** the app isn't running on :3001, or the Caddyfile port
-  doesn't match `PORT` in `.env`. Check `sudo systemctl status sujood-api` and
-  `journalctl -u sujood-api -f`.
+  doesn't match `PORT` in `.env`. Check `pm2 status` and `pm2 logs sujood`.
 - **App won't start / DB errors:** verify `DATABASE_URL` in `/opt/sujood-mats/.env` and that
   Postgres is running (`sudo systemctl status postgresql`). Re-run `npm run db:deploy`.
+  See the crash reason with `pm2 logs sujood --err`.
 - **Changed code but site looks the same:** you need to rebuild (`npm run build`) and
-  `sudo systemctl restart sujood-api`. The frontend is a static bundle baked at build time.
+  `pm2 restart sujood`. The frontend is a static bundle baked at build time.
 
 ---
 
