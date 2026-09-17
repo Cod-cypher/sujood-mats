@@ -1,9 +1,11 @@
 import {StrictMode} from 'react';
-import {createRoot} from 'react-dom/client';
+import {hydrateRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-createRoot(document.getElementById('root')!).render(
+// The server renders <App /> into #root (see src/entry-server.tsx); attach to that markup.
+hydrateRoot(
+  document.getElementById('root')!,
   <StrictMode>
     <App />
   </StrictMode>,

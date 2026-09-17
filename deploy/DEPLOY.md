@@ -87,8 +87,14 @@ Quick local check that the app boots and serves both:
 sudo -u sujood env PORT=3001 NODE_ENV=production node dist/server.cjs &
 curl -s http://127.0.0.1:3001/api/health          # -> {"status":"healthy",...}
 curl -s http://127.0.0.1:3001/ | grep '<title>'   # -> the page title
+curl -sI http://127.0.0.1:3001/guides/ | head -1  # -> HTTP/1.1 200 (server-rendered SEO page)
+curl -sI http://127.0.0.1:3001/nope/ | head -1    # -> HTTP/1.1 404
 kill %1
 ```
+
+The build writes `dist/client/` (browser assets), `dist/ssr/entry-server.cjs` (homepage
+server render) and `dist/server.cjs`. Guide and product pages live in `src/seo/` and are
+rendered by Express on request; `/sitemap.xml` is generated from the same list.
 
 ---
 

@@ -5,7 +5,9 @@
 
 import express from "express";
 import cors from "cors";
+import fs from "fs";
 import path from "path";
+import { createRequire } from "module";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -25,6 +27,9 @@ import {
   getTopProducts,
   getRecentEvents,
 } from "./db";
+import { SEO_PAGES, HOME_UPDATED, findSeoPage, renderSeoPage } from "./src/seo/registry";
+import { renderNotFound } from "./src/seo/layout";
+import { renderSitemap } from "./src/seo/sitemap";
 
 dotenv.config();
 
@@ -381,6 +386,36 @@ app.get("/api/analytics/events", async (req, res) => {
   }
 });
 
+// ---------------------- SERVER-RENDERED SEO PAGES ----------------------
+
+app.get("/sitemap.xml", (req, res) => {
+  res.type("application/xml").set("Cache-Control", "public, max-age=3600");
+  res.send(renderSitemap(SEO_PAGES, HOME_UPDATED));
+});
+
+app.get("*", (req, res, next) => {
+  const page = findSeoPage(req.path);
+  if (page) {
+    res.set("Cache-Control", "public, max-age=300").type("html").send(renderSeoPage(page));
+    return;
+  }
+  // /wool-prayer-mats -> /wool-prayer-mats/ (canonical form), keeping any query string.
+  if (!req.path.endsWith("/") && findSeoPage(req.path + "/")) {
+    const query = req.originalUrl.slice(req.path.length);
+    res.redirect(301, req.path + "/" + query);
+    return;
+  }
+  next();
+});
+
+function sendNotFound(req: express.Request, res: express.Response) {
+  if (req.path.startsWith("/api/")) {
+    res.status(404).json({ error: "Not found." });
+    return;
+  }
+  res.status(404).type("html").send(renderNotFound());
+}
+
 // ---------------------- VITE INTERPRETER MIDDLEWARE ----------------------
 
 async function start() {
@@ -388,17 +423,41 @@ async function start() {
     console.log("Starting server in development mode with Vite HMR wrapper...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: "spa",
+      appType: "custom",
     });
     app.use(vite.middlewares);
+
+    // Homepage: SSR the React app on every request so edits show up immediately.
+    app.get("/", async (req, res, next) => {
+      try {
+        const template = await vite.transformIndexHtml(
+          req.originalUrl,
+          fs.readFileSync(path.join(process.cwd(), "index.html"), "utf-8")
+        );
+        const { render } = await vite.ssrLoadModule("/src/entry-server.tsx");
+        res.type("html").send(template.replace("<!--app-html-->", render()));
+      } catch (error) {
+        vite.ssrFixStacktrace(error as Error);
+        next(error);
+      }
+    });
   } else {
     console.log("Starting server in production mode serving static bundle...");
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    const clientPath = path.join(process.cwd(), "dist", "client");
+    const template = fs.readFileSync(path.join(clientPath, "index.html"), "utf-8");
+    // Plain require so esbuild leaves this runtime path alone (bundle is built by vite --ssr).
+    const requireFromRoot = createRequire(path.join(process.cwd(), "package.json"));
+    const { render } = requireFromRoot(path.join(process.cwd(), "dist", "ssr", "entry-server.cjs"));
+    // The homepage has no per-request data, so render it once at startup.
+    const homeHtml = template.replace("<!--app-html-->", render());
+
+    app.use(express.static(clientPath, { index: false }));
+    app.get("/", (req, res) => {
+      res.set("Cache-Control", "public, max-age=300").type("html").send(homeHtml);
     });
   }
+
+  app.use(sendNotFound);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Sujood Server running harmoniously on http://0.0.0.0:${PORT}`);

@@ -187,7 +187,7 @@ export default function App() {
             <button onClick={() => scrollToId("reviews-section")} className="cursor-pointer hover:text-spruce-950 transition-colors">
               REVIEWS
             </button>
-            <a href="/prayer-mat-guide/" className="cursor-pointer hover:text-spruce-950 transition-colors">
+            <a href="/guides/" className="cursor-pointer hover:text-spruce-950 transition-colors">
               GUIDES
             </a>
           </nav>
@@ -237,7 +237,7 @@ export default function App() {
               <button onClick={() => { scrollToId("reviews-section"); setIsMenuOpen(false); }} className="text-left hover:text-spruce-950 transition-colors">
                 REVIEWS
               </button>
-              <a href="/prayer-mat-guide/" className="hover:text-spruce-950 transition-colors">
+              <a href="/guides/" className="hover:text-spruce-950 transition-colors">
                 GUIDES
               </a>
             </nav>
@@ -497,6 +497,7 @@ export default function App() {
                 <button onClick={() => scrollToId("catalog-section")} className="cursor-pointer hover:text-clay-ochre text-left transition-colors">Products</button>
                 <button onClick={() => scrollToId("philosophy-section")} className="cursor-pointer hover:text-clay-ochre text-left transition-colors">Why Sujood</button>
                 <a href="/prayer-mat-guide/" className="hover:text-clay-ochre text-left transition-colors">Buying Guide</a>
+                <a href="/guides/" className="hover:text-clay-ochre text-left transition-colors">All Guides</a>
               </div>
             </div>
 
@@ -512,6 +513,7 @@ export default function App() {
           <div className="md:col-span-3 text-center md:text-right text-[10px] font-mono text-spruce-400 space-y-1">
             <p>&copy; 2026 Sujood.</p>
             <p>Prayer mats made for everyday comfort.</p>
+            <p>Website and search optimization by <a href="https://optimizeindex.com/" rel="nofollow" className="hover:text-clay-ochre transition-colors underline">OptimizeIndex</a>.</p>
           </div>
 
         </div>

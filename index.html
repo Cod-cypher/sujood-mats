@@ -115,15 +115,8 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
-    <!-- Content for crawlers/users before the app's JavaScript loads. -->
-    <noscript>
-      <h1>Sujood Mats — Comfortable Prayer Mats</h1>
-      <p>
-        Buy Sujood prayer mats online: orthopedic memory-foam, hand-woven wool, and
-        lightweight silk travel mats built for comfort during daily prayer.
-      </p>
-    </noscript>
+    <!-- server.ts renders the app into this placeholder (src/entry-server.tsx). -->
+    <div id="root"><!--app-html--></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

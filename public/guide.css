@@ -52,3 +52,25 @@ img.inline { max-width: 100%; border-radius: 12px; border: 1px solid var(--borde
 }
 .related a:hover { border-color: var(--gold); }
 .related a strong { color: var(--gold-bright); display: block; margin-bottom: 2px; }
+header.site .logo { display: flex; }
+header.site .brand { color: var(--text); text-decoration: none; }
+header.site .navlink { color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+header.site .navlink:hover { color: var(--gold-bright); }
+footer.site p { margin: 6px 0; }
+.crumbs { color: var(--muted); font-size: 0.8rem; margin-bottom: 8px; }
+.crumbs a { color: var(--muted); text-decoration: none; }
+.crumbs a:hover { color: var(--gold-bright); }
+.price { font-size: 1.25rem; color: var(--muted); }
+.price strong { color: var(--gold-bright); font-family: Georgia, serif; font-size: 1.6rem; }
+.product-hero img { width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--border); display: block; margin-top: 16px; }
+.swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 18px 0; }
+.swatches figure { margin: 0; }
+.swatches img { width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--border); display: block; }
+.swatches figcaption { color: var(--muted); font-size: 0.85rem; margin-top: 6px; text-align: center; }
+table.specs { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 0.95rem; display: block; overflow-x: auto; }
+table.specs th, table.specs td { border-bottom: 1px solid var(--border); padding: 10px 12px; text-align: left; vertical-align: top; }
+table.specs thead th, table.specs tbody th { color: #f5f5f0; font-weight: 600; }
+@media (max-width: 520px) {
+  header.site .navlink { display: none; }
+  h1 { font-size: 1.7rem; }
+}
