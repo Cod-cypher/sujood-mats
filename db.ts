@@ -142,13 +142,16 @@ async function ensureSession(
   if (typeof sessionId !== "string" || sessionId.length === 0 || sessionId.length > 100) {
     return { id: null, country: null, city: null };
   }
-  const s = await prisma.session.upsert({
+  const s = await prisma.session.findUnique({
     where: { id: sessionId },
-    create: { id: sessionId },
-    update: {},
     select: { country: true, city: true },
   });
-  return { id: sessionId, country: s.country ?? null, city: s.city ?? null };
+  if (!s) {
+    // INSERT ... ON CONFLICT DO NOTHING: on page load /api/session and the first
+    // /api/track arrive together, and two plain creates would collide on the primary key.
+    await prisma.session.createMany({ data: [{ id: sessionId }], skipDuplicates: true });
+  }
+  return { id: sessionId, country: s?.country ?? null, city: s?.city ?? null };
 }
 
 // ---------------------------------------------------------------------------
