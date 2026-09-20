@@ -132,24 +132,34 @@ export async function upsertSession(input: SessionInput): Promise<void> {
   });
 }
 
+// Events, carts and orders reference sessions by foreign key, but the browser's
+// /api/session call can be blocked or lost (ad blockers, a DB restart). Create a bare
+// session row if it is missing, so a write is never rejected for that reason. Returns the
+// usable id and the session's location snapshot.
+async function ensureSession(
+  sessionId: string | null | undefined
+): Promise<{ id: string | null; country: string | null; city: string | null }> {
+  if (typeof sessionId !== "string" || sessionId.length === 0 || sessionId.length > 100) {
+    return { id: null, country: null, city: null };
+  }
+  const s = await prisma.session.upsert({
+    where: { id: sessionId },
+    create: { id: sessionId },
+    update: {},
+    select: { country: true, city: true },
+  });
+  return { id: sessionId, country: s.country ?? null, city: s.city ?? null };
+}
+
 // ---------------------------------------------------------------------------
 // EVENTS
 // ---------------------------------------------------------------------------
 export async function recordEvent(input: EventInput): Promise<void> {
   // Snapshot location from the session so geo queries don't need a join.
-  let country: string | null = null;
-  let city: string | null = null;
-  if (input.sessionId) {
-    const s = await prisma.session.findUnique({
-      where: { id: input.sessionId },
-      select: { country: true, city: true },
-    });
-    country = s?.country ?? null;
-    city = s?.city ?? null;
-  }
+  const { id: sessionId, country, city } = await ensureSession(input.sessionId);
   await prisma.event.create({
     data: {
-      sessionId: input.sessionId ?? null,
+      sessionId,
       eventType: input.eventType,
       productId: input.productId ?? null,
       productName: input.productName ?? null,
@@ -179,6 +189,7 @@ export async function syncCart(input: CartSyncInput): Promise<void> {
   const itemCount = input.items.reduce((n, i) => n + i.quantity, 0);
   const subtotal = input.items.reduce((n, i) => n + i.price * i.quantity, 0);
   const status = input.status ?? "active";
+  const { id: sessionId } = await ensureSession(input.sessionId);
 
   await prisma.$transaction(async (tx) => {
     const existing = await tx.cart.findUnique({
@@ -193,7 +204,7 @@ export async function syncCart(input: CartSyncInput): Promise<void> {
       where: { id: input.cartId },
       create: {
         id: input.cartId,
-        sessionId: input.sessionId ?? null,
+        sessionId,
         status,
         itemCount,
         subtotal,
@@ -201,7 +212,7 @@ export async function syncCart(input: CartSyncInput): Promise<void> {
         abandonedAt,
       },
       update: {
-        sessionId: input.sessionId ?? undefined,
+        sessionId: sessionId ?? undefined,
         status,
         itemCount,
         subtotal,
@@ -245,24 +256,16 @@ export async function markStaleCartsAbandoned(minutes = 30): Promise<number> {
 export async function saveOrder(input: SaveOrderInput): Promise<void> {
   const c = input.customerInfo;
 
-  // Session location for the purchase event (read before the write txn).
-  let country: string | null = null;
-  let city: string | null = null;
-  if (input.sessionId) {
-    const s = await prisma.session.findUnique({
-      where: { id: input.sessionId },
-      select: { country: true, city: true },
-    });
-    country = s?.country ?? null;
-    city = s?.city ?? null;
-  }
+  // Session location for the purchase event (read before the write txn). An order must
+  // never be refused because the visitor's analytics session is missing.
+  const { id: sessionId, country, city } = await ensureSession(input.sessionId);
 
   // Order + line items + cart conversion + purchase event: all-or-nothing.
   await prisma.$transaction(async (tx) => {
     await tx.order.create({
       data: {
         id: input.orderId,
-        sessionId: input.sessionId ?? null,
+        sessionId,
         cartId: input.cartId ?? null,
         customerName: c.name,
         customerEmail: c.email,
@@ -307,7 +310,7 @@ export async function saveOrder(input: SaveOrderInput): Promise<void> {
 
     await tx.event.create({
       data: {
-        sessionId: input.sessionId ?? null,
+        sessionId,
         eventType: "purchase",
         value: input.total,
         cartId: input.cartId ?? null,
