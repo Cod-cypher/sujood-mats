@@ -6,7 +6,8 @@
 // Server-rendered HTML shell shared by every guide, product and hub page.
 
 import { esc, jsonLd } from "./escape";
-import { SITE_NAME, ORG_ID, DEFAULT_IMAGE, absoluteUrl } from "./site";
+import { NAV_LINKS, FOOTER_COLUMNS, FOOTER_BLURB } from "./nav";
+import { SITE_NAME, ORG_ID, DEFAULT_IMAGE, CONTACT_EMAIL, absoluteUrl } from "./site";
 import type { SeoPage } from "./types";
 
 type Lookup = (path: string) => SeoPage | undefined;
@@ -26,13 +27,27 @@ function head(opts: {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-5XDYZ75YQF"></script>
+    <!-- Google tag (gtag.js). Hits queue in dataLayer straight away; the library itself
+         loads on first interaction or 5s after load. Keep in sync with index.html. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag() { dataLayer.push(arguments); }
       gtag('js', new Date());
       gtag('config', 'G-5XDYZ75YQF');
+      (function () {
+        var done = false, events = ['pointerdown', 'keydown', 'touchstart', 'scroll'];
+        function load() {
+          if (done) return;
+          done = true;
+          events.forEach(function (e) { removeEventListener(e, load); });
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=G-5XDYZ75YQF';
+          document.head.appendChild(s);
+        }
+        events.forEach(function (e) { addEventListener(e, load, { passive: true, once: true }); });
+        addEventListener('load', function () { setTimeout(load, 5000); });
+      })();
     </script>
 
     <link rel="icon" type="image/png" href="/favicon-64.png" />
@@ -56,22 +71,59 @@ ${opts.graph ? `\n    <script type="application/ld+json">${jsonLd({ "@context": 
   </head>`;
 }
 
+const navLinks = (indent: string) =>
+  NAV_LINKS.map((l) => `${indent}<a href="${esc(l.href ?? "/")}">${esc(l.label)}</a>`).join("\n");
+
+// Mirrors the homepage header in src/App.tsx (links come from ./nav). The mobile
+// menu is a <details> element, so these pages still ship no JavaScript of their own.
 const HEADER = `<header class="site">
-      <div class="wrap">
-        <a class="logo" href="/"><img src="/images/logo-128.webp" width="40" height="40" alt="Sujood Mats" /></a>
-        <a class="brand" href="/">SUJOOD</a>
-        <span class="spacer"></span>
-        <a class="navlink" href="/guides/">Guides</a>
-        <a class="btn" href="/">Shop Prayer Mats</a>
+      <div class="bar">
+        <a class="logo" href="/" aria-label="Sujood Mats home"><img src="/images/logo-128.webp" width="56" height="56" alt="Sujood Mats" /></a>
+        <nav class="site-nav" aria-label="Main">
+${navLinks("          ")}
+        </nav>
+        <div class="actions">
+          <a class="btn" href="/">Shop Prayer Mats</a>
+          <details class="menu">
+            <summary aria-label="Toggle menu">
+              <svg class="i-open" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+              <svg class="i-close" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+            </summary>
+            <nav aria-label="Mobile">
+${navLinks("              ")}
+            </nav>
+          </details>
+        </div>
       </div>
     </header>`;
 
-// The one site-wide OptimizeIndex credit for server-rendered pages (nofollow: it
-// appears on every page). The React homepage footer carries the same line.
+// Mirrors the homepage footer in src/App.tsx, including the one site-wide
+// OptimizeIndex credit (nofollow: it appears on every page).
 const FOOTER = `<footer class="site">
-      <div class="wrap">
-        <p>&copy; 2026 Sujood. Prayer mats made for everyday comfort. &middot; <a href="/">Home</a> &middot; <a href="/guides/">Guides</a></p>
-        <p>Website and search optimization by <a href="https://optimizeindex.com/" rel="nofollow">OptimizeIndex</a>.</p>
+      <div class="bar">
+        <div class="about">
+          <a class="mark" href="/">
+            <img src="/images/logo-128.webp" width="48" height="48" loading="lazy" alt="Sujood Mats" />
+            <span>S U J O O D</span>
+          </a>
+          <p>${esc(FOOTER_BLURB)}</p>
+        </div>
+        <div class="cols">
+${FOOTER_COLUMNS.map(
+  (col) => `          <div>
+            <p class="col-title">${esc(col.title)}</p>
+${col.items
+  .map((i) => (i.href ? `            <a href="${esc(i.href)}">${esc(i.label)}</a>` : `            <span>${esc(i.label)}</span>`))
+  .join("\n")}
+          </div>`
+).join("\n")}
+        </div>
+        <div class="legal">
+          <p>&copy; 2026 Sujood.</p>
+          <p>Prayer mats made for everyday comfort.</p>
+          <p><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>
+          <p>Website and search optimization by <a href="https://optimizeindex.com/" rel="nofollow">OptimizeIndex</a>.</p>
+        </div>
       </div>
     </footer>`;
 
@@ -92,6 +144,8 @@ function buildGraph(page: SeoPage): Record<string, unknown>[] {
       name: SITE_NAME,
       url: absoluteUrl("/"),
       logo: absoluteUrl(DEFAULT_IMAGE),
+      email: CONTACT_EMAIL,
+      contactPoint: { "@type": "ContactPoint", contactType: "customer service", email: CONTACT_EMAIL },
     },
     {
       "@type": "BreadcrumbList",

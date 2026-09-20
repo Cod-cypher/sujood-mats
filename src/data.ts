@@ -8,6 +8,7 @@ import { PrayerMatProduct, Review } from "./types";
 export const PRODUCTS: PrayerMatProduct[] = [
   {
     id: "rawdah-ortho",
+    slug: "rawdah-orthopedic",
     name: "The Rawdah Orthopedic",
     tagline: "Extra cushioning for knees and ankles",
     price: 185,
@@ -33,6 +34,7 @@ export const PRODUCTS: PrayerMatProduct[] = [
   },
   {
     id: "silk-route",
+    slug: "silk-route-travel",
     name: "The Silk Route Travel",
     tagline: "Lightweight mat for travel",
     price: 145,
@@ -58,6 +60,7 @@ export const PRODUCTS: PrayerMatProduct[] = [
   },
   {
     id: "andalusia-wool",
+    slug: "andalusia-flatweave",
     name: "The Andalusia Flatweave",
     tagline: "Traditional wool flatweave",
     price: 210,
@@ -117,6 +120,14 @@ export const FAQS = [
   {
     question: "How do I choose between Orthopedic, Silk, and Wool?",
     answer: "If you suffer from any stiffness or discomfort in your knees, ankles, or lower back, our 12mm orthopedic memory foam (The Rawdah) is specifically engineered for medical impact relief. For frequent travelers and commuters, our Silk Route (3mm) is lightweight, fold-resistant, and premium. For a lifelong heirloom mat with rustic, natural insulation and spiritual geometric history, choose our 100% hand-spun Wool Andalusia Flatweave."
+  },
+  {
+    question: "Which prayer mat is best for knee pain?",
+    answer: "A thick orthopedic prayer mat. The Rawdah Orthopedic has a 12mm dual-density memory foam core that cushions the knees, ankles, and forehead on hard floors, plus a non-slip rubber underlay so it stays put when you stand and prostrate."
+  },
+  {
+    question: "What is the difference between a prayer mat and a prayer rug?",
+    answer: "There is no real difference. Prayer mat and prayer rug are two English names for the same thing, also known as a sajjada in Arabic, a janamaz in Urdu and Persian, and a musalla. \"Rug\" is more often used for woven wool or silk pieces like our Andalusia Flatweave, and \"mat\" for cushioned or foldable ones, but both words describe a clean, dedicated surface for prayer."
   },
   {
     question: "What is the spiritual meaning behind the patterns?",

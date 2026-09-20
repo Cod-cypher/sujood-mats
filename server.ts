@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import crypto from "crypto";
 import express from "express";
+import compression from "compression";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
@@ -30,6 +32,9 @@ import {
 import { SEO_PAGES, HOME_UPDATED, findSeoPage, renderSeoPage } from "./src/seo/registry";
 import { renderNotFound } from "./src/seo/layout";
 import { renderSitemap } from "./src/seo/sitemap";
+import { renderLlmsTxt } from "./src/seo/llms";
+import { PRODUCTS } from "./src/data";
+import { sendOrderEmails } from "./mailer";
 
 dotenv.config();
 
@@ -40,6 +45,9 @@ const PORT = Number(process.env.PORT) || 3000;
 
 // Behind a proxy/load balancer (Caddy) we still want the real client IP.
 app.set("trust proxy", true);
+
+// Gzip HTML, CSS, JS and JSON (images are already compressed and are skipped).
+app.use(compression());
 
 // CORS: the frontend (GitHub Pages) is a different origin from this API.
 // Set CORS_ORIGIN to a comma-separated allowlist, e.g.
@@ -247,37 +255,98 @@ Always respond within 140 words. Maintain pristine, high-class language. Avoid d
   }
 });
 
-// Mock checkout endpoint — persists an enriched order and closes out the cart.
-app.post("/api/checkout", async (req, res) => {
-  const { cartItems, customerInfo, sessionId, cartId } = req.body;
-  if (!cartItems || cartItems.length === 0) {
-    return res.status(400).json({ error: "Cart is empty." });
+// ---------------------- CHECKOUT ----------------------
+// Orders are invoice-based: nothing is charged here. The order is saved as unpaid, the
+// customer is told it is not confirmed until the invoice (sent by hand) is paid, and
+// sales is notified that an invoice is needed.
+
+// Checkout emails an address the visitor types in, so cap it per IP to stop it being
+// used to flood someone else's inbox.
+const CHECKOUT_LIMIT = 5;
+const CHECKOUT_WINDOW_MS = 60 * 60 * 1000;
+const checkoutHits = new Map<string, number[]>();
+function checkoutAllowed(ip: string): boolean {
+  const now = Date.now();
+  const recent = (checkoutHits.get(ip) ?? []).filter((t) => now - t < CHECKOUT_WINDOW_MS);
+  if (recent.length >= CHECKOUT_LIMIT) {
+    checkoutHits.set(ip, recent);
+    return false;
   }
-  if (!customerInfo || !customerInfo.email || !customerInfo.name) {
-    return res.status(400).json({ error: "Missing customer details." });
+  recent.push(now);
+  checkoutHits.set(ip, recent);
+  return true;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_QUANTITY = 20;
+const cleanField = (v: unknown, max: number) =>
+  typeof v === "string" ? v.replace(/[\r\n\t]+/g, " ").trim().slice(0, max) : "";
+
+app.post("/api/checkout", async (req, res) => {
+  const { cartItems, customerInfo, sessionId, cartId } = req.body ?? {};
+  if (!Array.isArray(cartItems) || cartItems.length === 0) {
+    return res.status(400).json({ error: "Your cart is empty." });
+  }
+  if (cartItems.length > 20) {
+    return res.status(400).json({ error: "Too many items in one order. Please contact us for bulk orders." });
   }
 
-  const orderId = `SUJOOD-2026-${Math.floor(100000 + Math.random() * 900000)}`;
-  const subtotal = cartItems.reduce((acc: number, item: any) => acc + (item.price * item.quantity), 0);
+  const customer = {
+    name: cleanField(customerInfo?.name, 120),
+    email: cleanField(customerInfo?.email, 254).toLowerCase(),
+    address: cleanField(customerInfo?.address, 200),
+    city: cleanField(customerInfo?.city, 120),
+    postalCode: cleanField(customerInfo?.postalCode, 20),
+    country: cleanField(customerInfo?.country, 80),
+  };
+  if (!customer.name || !customer.address || !customer.city || !customer.postalCode || !customer.country) {
+    return res.status(400).json({ error: "Please fill in your full shipping address." });
+  }
+  if (!EMAIL_RE.test(customer.email)) {
+    return res.status(400).json({ error: "Please enter a valid email address." });
+  }
+
+  // Price the order from our own catalogue: never trust names or prices from the browser.
+  const lineItems = [];
+  for (const item of cartItems) {
+    const product = PRODUCTS.find((p) => p.id === item?.productId);
+    const colorway = product?.colorways.find((c) => c.name === item?.colorway);
+    const quantity = Number(item?.quantity);
+    if (!product || !colorway || !Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY) {
+      return res.status(400).json({ error: "Something in your cart is no longer available. Please refresh and try again." });
+    }
+    lineItems.push({
+      productId: product.id,
+      name: product.name,
+      colorway: colorway.name,
+      price: product.price,
+      quantity,
+      imageUrl: colorway.imageUrl ?? product.imageUrl,
+    });
+  }
+
+  const ipAddress = getClientIp(req);
+  if (!checkoutAllowed(ipAddress)) {
+    return res.status(429).json({ error: "Too many orders from this connection. Please try again later or email us." });
+  }
+
+  const orderId = `SUJOOD-${new Date().getFullYear()}-${crypto.randomInt(100000, 1000000)}`;
+  const subtotal = lineItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   // Mirror the frontend's companion-bundle discount so persisted money reconciles.
-  const discount = cartItems.length > 1 ? 25 : 0;
+  const discount = lineItems.length > 1 ? 25 : 0;
   const total = Math.max(0, subtotal - discount);
-  const estimatedDelivery = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString(undefined, {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-  });
 
   try {
     await saveOrder({
       orderId,
       sessionId: sessionId ?? null,
       cartId: cartId ?? null,
-      ipAddress: getClientIp(req),
-      customerInfo,
-      cartItems,
+      ipAddress,
+      customerInfo: { ...customer, timezone: cleanField(customerInfo?.timezone, 64) || undefined },
+      cartItems: lineItems,
       subtotal,
       discount,
       total,
-      estimatedDelivery,
     });
   } catch (error) {
     console.error("Failed to persist order:", error);
@@ -285,16 +354,36 @@ app.post("/api/checkout", async (req, res) => {
     try {
       await recordEvent({ sessionId, eventType: "purchase_failed", value: total, cartId, metadata: { orderId } });
     } catch { /* best-effort */ }
-    return res.status(500).json({ error: "We could not register your order in the loom workshop. Please try again." });
+    return res.status(500).json({ error: "We could not save your order. Please try again." });
   }
 
-  res.json({
-    success: true,
+  // The order is saved either way; the response says whether the customer email went out.
+  const sent = await sendOrderEmails({
     orderId,
+    placedAt: new Date(),
+    customer,
+    items: lineItems,
+    subtotal,
+    discount,
     total,
-    estimatedDelivery,
-    message: `Thanks, ${customerInfo.name}. Your order has been received. We'll prepare and pack it, then email you tracking updates.`
+    ipAddress,
   });
+
+  res.json({ success: true, orderId, total, email: customer.email, emailSent: sent.customer });
+});
+
+// ---------------------- ADMIN-ONLY READ ENDPOINTS ----------------------
+// Orders and analytics contain customer names, emails and addresses. They answer only to
+// "Authorization: Bearer <ADMIN_TOKEN>", and do not exist at all while ADMIN_TOKEN is unset.
+app.use(["/api/orders", "/api/analytics"], (req, res, next) => {
+  const token = process.env.ADMIN_TOKEN ?? "";
+  const given = Buffer.from((req.headers.authorization ?? "").replace(/^Bearer\s+/i, ""));
+  const expected = Buffer.from(token);
+  if (!token || given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
+    res.status(404).json({ error: "Not found." });
+    return;
+  }
+  next();
 });
 
 // Retrieve a single persisted order (with its line items)
@@ -393,6 +482,11 @@ app.get("/sitemap.xml", (req, res) => {
   res.send(renderSitemap(SEO_PAGES, HOME_UPDATED));
 });
 
+app.get("/llms.txt", (req, res) => {
+  res.type("text/plain; charset=utf-8").set("Cache-Control", "public, max-age=3600");
+  res.send(renderLlmsTxt(SEO_PAGES));
+});
+
 app.get("*", (req, res, next) => {
   const page = findSeoPage(req.path);
   if (page) {
@@ -451,7 +545,17 @@ async function start() {
     // The homepage has no per-request data, so render it once at startup.
     const homeHtml = template.replace("<!--app-html-->", render());
 
-    app.use(express.static(clientPath, { index: false }));
+    app.use(
+      express.static(clientPath, {
+        index: false,
+        setHeaders(res, filePath) {
+          const rel = path.relative(clientPath, filePath).replace(/\\/g, "/");
+          // Vite fingerprints everything in /assets/, so it can be cached forever.
+          if (rel.startsWith("assets/")) res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          else if (rel.startsWith("images/") || rel.startsWith("fonts/")) res.setHeader("Cache-Control", "public, max-age=2592000");
+        },
+      })
+    );
     app.get("/", (req, res) => {
       res.set("Cache-Control", "public, max-age=300").type("html").send(homeHtml);
     });

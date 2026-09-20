@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import {
   ShoppingBag,
   Heart,
@@ -24,6 +24,26 @@ import { CartItem } from "./types";
 import ProductCatalog from "./components/ProductCatalog";
 import Cart from "./components/Cart";
 import { initAnalytics, track, syncCart, getCartId } from "./analytics";
+import { productPath, CONTACT_EMAIL } from "./seo/site";
+import { webpSrcSet } from "./images";
+import { NAV_LINKS, FOOTER_COLUMNS, FOOTER_BLURB } from "./seo/nav";
+
+// The hero photo is the LCP element; index.html preloads it with these same sizes.
+const HERO_IMAGE_SIZES = "(min-width: 1024px) 480px, calc(100vw - 48px)";
+
+// Guide pages linked from the "Prayer mats for every need" section.
+const GUIDE_LINKS = [
+  { href: "/orthopedic-prayer-mats/", title: "Orthopedic prayer mats", blurb: "For knee & joint pain" },
+  { href: "/wool-prayer-mats/", title: "Wool prayer mats", blurb: "Handwoven & natural" },
+  { href: "/silk-prayer-mats/", title: "Silk prayer mats", blurb: "Feel, sheen & care" },
+  { href: "/travel-prayer-mats/", title: "Travel prayer mats", blurb: "Lightweight & portable" },
+  { href: "/non-slip-prayer-mats/", title: "Non-slip prayer mats", blurb: "For tile, wood & laminate" },
+  { href: "/prayer-mats-for-elderly/", title: "Prayer mats for the elderly", blurb: "Comfort & stability" },
+  { href: "/prayer-mat-size-guide/", title: "Prayer mat size guide", blurb: "Dimensions in cm & inches" },
+  { href: "/prayer-mat-thickness/", title: "Prayer mat thickness", blurb: "3mm vs 8mm vs 12mm" },
+  { href: "/prayer-mat-gifts/", title: "Prayer mat gifts", blurb: "Ramadan, Eid & weddings" },
+  { href: "/prayer-mat-guide/", title: "How to choose a prayer mat", blurb: "The full buying guide" },
+];
 
 // Maps CartItem[] to the backend cart snapshot shape.
 const toSyncItems = (items: CartItem[]) =>
@@ -37,6 +57,8 @@ const toSyncItems = (items: CartItem[]) =>
     imageUrl: i.imageUrl,
   }));
 
+const CART_STORAGE_KEY = "sujood-cart-v1";
+
 export default function App() {
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -47,6 +69,30 @@ export default function App() {
   // Keep a ref to the latest cart so the unload handler reads current contents.
   const cartRef = useRef<CartItem[]>(cart);
   cartRef.current = cart;
+
+  // The cart survives reloads and return visits. It is restored after hydration (the
+  // server always renders an empty cart) and re-priced from the current catalogue, so
+  // a saved cart can never show a price the server would not charge.
+  const [cartRestored, setCartRestored] = useState(false);
+  useEffect(() => {
+    try {
+      const saved: CartItem[] = JSON.parse(localStorage.getItem(CART_STORAGE_KEY) ?? "[]");
+      const restored = (Array.isArray(saved) ? saved : []).flatMap((item) => {
+        const product = PRODUCTS.find((p) => p.id === item.productId);
+        const colorway = product?.colorways.find((c) => c.name === item.colorway);
+        if (!product || !colorway || !(item.quantity >= 1)) return [];
+        return [{ ...item, name: product.name, price: product.price, imageUrl: colorway.imageUrl || product.imageUrl }];
+      });
+      if (restored.length > 0) setCart(restored);
+    } catch { /* unreadable or blocked storage: start with an empty cart */ }
+    setCartRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!cartRestored) return;
+    try {
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    } catch { /* storage unavailable: the cart just won't persist */ }
+  }, [cart, cartRestored]);
 
   // Register the visitor session once, and flag the cart as abandoned on exit.
   useEffect(() => {
@@ -68,6 +114,14 @@ export default function App() {
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
+  };
+
+  // Shared nav uses "/#section" hrefs: scroll smoothly here instead of reloading.
+  const onNavClick = (e: React.MouseEvent, href: string) => {
+    if (!href.startsWith("/#")) return;
+    e.preventDefault();
+    scrollToId(href.slice(2));
+    setIsMenuOpen(false);
   };
 
   // Cart operations
@@ -177,19 +231,12 @@ export default function App() {
           </button>
 
           {/* Nav Links (Desktop) */}
-          <nav className="hidden md:flex items-center space-x-8 text-xs font-mono tracking-wider text-spruce-600">
-            <button onClick={() => scrollToId("catalog-section")} className="cursor-pointer hover:text-spruce-950 transition-colors">
-              PRODUCTS
-            </button>
-            <button onClick={() => scrollToId("philosophy-section")} className="cursor-pointer hover:text-spruce-950 transition-colors">
-              WHY SUJOOD
-            </button>
-            <button onClick={() => scrollToId("reviews-section")} className="cursor-pointer hover:text-spruce-950 transition-colors">
-              REVIEWS
-            </button>
-            <a href="/guides/" className="cursor-pointer hover:text-spruce-950 transition-colors">
-              GUIDES
-            </a>
+          <nav className="hidden md:flex items-center space-x-8 text-xs font-mono tracking-wider uppercase text-spruce-600">
+            {NAV_LINKS.map((l) => (
+              <a key={l.label} href={l.href} onClick={(e) => onNavClick(e, l.href!)} className="cursor-pointer hover:text-spruce-950 transition-colors">
+                {l.label}
+              </a>
+            ))}
           </nav>
 
           {/* Action Hub */}
@@ -227,19 +274,12 @@ export default function App() {
         {/* Mobile Nav Panel */}
         {isMenuOpen && (
           <div className="md:hidden border-t border-spruce-100/60 bg-alabaster-pearl/95 backdrop-blur-md">
-            <nav className="max-w-7xl mx-auto px-6 py-4 flex flex-col space-y-4 text-xs font-mono tracking-wider text-spruce-600">
-              <button onClick={() => { scrollToId("catalog-section"); setIsMenuOpen(false); }} className="text-left hover:text-spruce-950 transition-colors">
-                PRODUCTS
-              </button>
-              <button onClick={() => { scrollToId("philosophy-section"); setIsMenuOpen(false); }} className="text-left hover:text-spruce-950 transition-colors">
-                WHY SUJOOD
-              </button>
-              <button onClick={() => { scrollToId("reviews-section"); setIsMenuOpen(false); }} className="text-left hover:text-spruce-950 transition-colors">
-                REVIEWS
-              </button>
-              <a href="/guides/" className="hover:text-spruce-950 transition-colors">
-                GUIDES
-              </a>
+            <nav className="max-w-7xl mx-auto px-6 py-4 flex flex-col space-y-4 text-xs font-mono tracking-wider uppercase text-spruce-600">
+              {NAV_LINKS.map((l) => (
+                <a key={l.label} href={l.href} onClick={(e) => onNavClick(e, l.href!)} className="hover:text-spruce-950 transition-colors">
+                  {l.label}
+                </a>
+              ))}
             </nav>
           </div>
         )}
@@ -297,6 +337,12 @@ export default function App() {
             <div className="relative overflow-hidden rounded-3xl border border-spruce-100 shadow-xl aspect-3/4">
               <img
                 src="/images/rawdah_mat_1782347244248.jpg"
+                srcSet={webpSrcSet("/images/rawdah_mat_1782347244248.jpg")}
+                sizes={HERO_IMAGE_SIZES}
+                width="1200"
+                height="896"
+                fetchPriority="high"
+                decoding="async"
                 alt="The Rawdah Orthopedic prayer mat"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover hover:scale-[1.03] transition-transform duration-[4000ms] ease-out"
@@ -334,7 +380,7 @@ export default function App() {
               </div>
               <h4 className="font-serif text-lg font-semibold text-spruce-950">Joint Support</h4>
               <p className="text-xs text-spruce-700 leading-relaxed text-pretty">
-                A regular rug passes the hardness of the floor straight to your joints. Our orthopedic foam core cushions your knees, ankles, and forehead so you can pray without stiffness or pain.
+                A thin mat passes the hardness of the floor straight to your joints. Our orthopedic foam core cushions your knees, ankles, and forehead so you can pray without stiffness or pain.
               </p>
               <div className="flex items-center space-x-1.5 text-xs font-mono text-clay-accent">
                 <CornerDownRight className="w-3.5 h-3.5" />
@@ -379,14 +425,49 @@ export default function App() {
         <div className="max-w-2xl space-y-4 mb-20 text-center mx-auto">
           <span className="text-[10px] font-mono tracking-widest text-clay-accent uppercase">OUR PRODUCTS</span>
           <h2 className="font-serif text-3xl sm:text-4xl text-spruce-950 font-bold tracking-tight">Shop Prayer Mats</h2>
+          <p className="text-sm text-spruce-700 leading-relaxed text-pretty">
+            Buy prayer mats online, direct from Sujood. Choose a colour, add it to your cart, and we ship every order free.
+          </p>
           <p className="text-xs text-spruce-500 font-mono tracking-wider">
-            QUALITY MATERIALS • LIFETIME WARRANTY ON EDGES
+            FREE SHIPPING • QUALITY MATERIALS • LIFETIME WARRANTY ON EDGES
           </p>
         </div>
 
         <ProductCatalog
           onAddToCart={handleAddToCart}
         />
+      </section>
+
+      {/* 5. PRAYER MATS BY NEED (links into the guides) */}
+      <section className="py-24 bg-spruce-50 border-y border-spruce-100/40" id="guides-section">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="max-w-3xl space-y-4 mb-12">
+            <span className="text-[10px] font-mono tracking-widest text-clay-accent uppercase">FIND YOUR MAT</span>
+            <h2 className="font-serif text-3xl sm:text-4xl text-spruce-950 font-bold tracking-tight">
+              Prayer mats for every need
+            </h2>
+            <p className="text-sm text-spruce-700 leading-relaxed text-pretty max-w-prose">
+              The right prayer mat depends on where and how you pray. A thick memory-foam mat takes the pressure off your knees and ankles on hard floors. A hand-woven wool mat is the durable everyday choice and stays warm on cold tile. A thin silk mat folds flat for work, travel and the mosque. Our guides cover each type, along with sizes, thickness, grip and care, so you can choose with confidence.
+            </p>
+            <p className="text-sm text-spruce-700 leading-relaxed text-pretty max-w-prose">
+              Looking to buy a prayer rug? Prayer mats are also called prayer rugs, sajjada, janamaz or musalla, depending on where you grew up, and they are the same thing. See all three on our{" "}
+              <a href="/prayer-rugs/" className="text-clay-accent underline hover:text-spruce-950 transition-colors">prayer rugs</a> page.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {GUIDE_LINKS.map((g) => (
+              <a
+                key={g.href}
+                href={g.href}
+                className="block p-4 bg-spruce-800 border border-spruce-100 rounded-xl hover:border-clay-ochre/50 transition-colors"
+              >
+                <span className="block font-serif text-sm font-semibold text-spruce-950">{g.title}</span>
+                <span className="block text-[11px] text-spruce-500 mt-1">{g.blurb}</span>
+              </a>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* 6. VERIFIED HEIRLOOM VERDICTS */}
@@ -457,21 +538,18 @@ export default function App() {
                     <ChevronDown className={`w-4 h-4 text-spruce-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
                   </button>
 
-                  <AnimatePresence initial={false}>
-                    {isOpen && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.25, ease: "easeInOut" }}
-                        className="overflow-hidden"
-                      >
-                        <div className="bg-[#121715] border border-spruce-100 p-5 rounded-xl text-sm text-spruce-900 leading-relaxed text-pretty mb-6 shadow-inner">
-                          {faq.answer}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                  {/* Answers stay mounted (collapsed) so they are in the server-rendered HTML. */}
+                  <motion.div
+                    initial={false}
+                    animate={{ height: isOpen ? "auto" : 0, opacity: isOpen ? 1 : 0 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    className="overflow-hidden"
+                    aria-hidden={!isOpen}
+                  >
+                    <div className="bg-[#121715] border border-spruce-100 p-5 rounded-xl text-sm text-spruce-900 leading-relaxed text-pretty mb-6 shadow-inner">
+                      {faq.answer}
+                    </div>
+                  </motion.div>
                 </div>
               );
             })}
@@ -481,38 +559,47 @@ export default function App() {
 
       {/* 8. HUMBLE FOOTER (Strict Anti-AI-Slop compliance) */}
       <footer className="bg-spruce-950 text-alabaster-pearl py-16 border-t border-spruce-900" id="main-footer">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
-          
-          <div className="md:col-span-4 space-y-4 text-center md:text-left">
-            <h4 className="font-serif text-xl font-bold tracking-widest">S U J O O D</h4>
-            <p className="text-[11px] text-spruce-300 leading-relaxed max-w-xs">
-              Comfortable prayer mats: orthopedic memory foam, hand-spun Pakistani wool, and lightweight silk mats for travel.
-            </p>
+        <div className="max-w-7xl mx-auto px-6 flex flex-col gap-12 lg:flex-row lg:items-start lg:justify-between lg:gap-8 xl:gap-12">
+
+          <div className="space-y-4 lg:flex-1 lg:max-w-xs">
+            <a href="/" onClick={(e) => onNavClick(e, "/#sujood-root")} className="inline-flex items-center gap-3 hover:opacity-90 transition-opacity">
+              <img
+                src="/images/logo-128.webp"
+                alt="Sujood Mats"
+                width="48"
+                height="48"
+                loading="lazy"
+                className="h-12 w-12 rounded-xl object-cover ring-1 ring-clay-ochre/40"
+              />
+              <span className="font-serif text-xl font-bold tracking-widest">S U J O O D</span>
+            </a>
+            <p className="text-[11px] leading-relaxed max-w-xs">{FOOTER_BLURB}</p>
           </div>
 
-          <div className="md:col-span-5 flex justify-center space-x-12 text-xs font-mono text-spruce-300">
-            <div className="space-y-3">
-              <h5 className="text-[10px] text-clay-ochre font-semibold tracking-wider">NAVIGATE</h5>
-              <div className="flex flex-col space-y-2">
-                <button onClick={() => scrollToId("catalog-section")} className="cursor-pointer hover:text-clay-ochre text-left transition-colors">Products</button>
-                <button onClick={() => scrollToId("philosophy-section")} className="cursor-pointer hover:text-clay-ochre text-left transition-colors">Why Sujood</button>
-                <a href="/prayer-mat-guide/" className="hover:text-clay-ochre text-left transition-colors">Buying Guide</a>
-                <a href="/guides/" className="hover:text-clay-ochre text-left transition-colors">All Guides</a>
+          {/* One row from 640px up; two tidy columns on phones, where three don't fit. */}
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-10 gap-y-8 sm:flex sm:flex-nowrap sm:whitespace-nowrap lg:shrink-0 text-xs font-mono">
+            {FOOTER_COLUMNS.map((col) => (
+              <div key={col.title} className="space-y-3 last:col-span-2">
+                <h5 className="text-[10px] text-clay-ochre font-semibold tracking-wider uppercase">{col.title}</h5>
+                <div className="flex flex-col space-y-2">
+                  {col.items.map((item) =>
+                    item.href ? (
+                      <a key={item.label} href={item.href} onClick={(e) => onNavClick(e, item.href!)} className="hover:text-clay-ochre transition-colors">
+                        {item.label}
+                      </a>
+                    ) : (
+                      <span key={item.label} className="text-spruce-400">{item.label}</span>
+                    )
+                  )}
+                </div>
               </div>
-            </div>
-
-            <div className="space-y-3">
-              <h5 className="text-[10px] text-clay-ochre font-semibold tracking-wider">OUR PROMISE</h5>
-              <div className="flex flex-col space-y-2">
-                <span className="text-spruce-400">Fair Trade Sourcing</span>
-                <span className="text-spruce-400">Lifetime Edge Warranty</span>
-              </div>
-            </div>
+            ))}
           </div>
 
-          <div className="md:col-span-3 text-center md:text-right text-[10px] font-mono text-spruce-400 space-y-1">
+          <div className="lg:w-52 lg:shrink-0 lg:text-right text-[10px] font-mono text-spruce-400 space-y-1">
             <p>&copy; 2026 Sujood.</p>
             <p>Prayer mats made for everyday comfort.</p>
+            <p><a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-clay-ochre transition-colors underline">{CONTACT_EMAIL}</a></p>
             <p>Website and search optimization by <a href="https://optimizeindex.com/" rel="nofollow" className="hover:text-clay-ochre transition-colors underline">OptimizeIndex</a>.</p>
           </div>
 

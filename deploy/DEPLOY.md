@@ -69,6 +69,15 @@ EOF
 - `CORS_ORIGIN` is **not needed** here (same origin). Leave it out.
 - Add `GEMINI_API_KEY="..."` if you want the AI advisor live; otherwise it runs in
   offline fallback mode.
+- **Order emails:** add `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SALES_EMAIL` and
+  `SALES_PASSWORD` (see `.env.example`). Checkout takes no payment: it emails the customer
+  that an invoice will follow and notifies sales (cc set by `ORDER_NOTIFY_CC`). Without
+  these, orders are still saved but **nobody is emailed**, so check `pm2 logs sujood` for
+  `[mailer]` warnings after the first deploy.
+- **Viewing orders:** set `ADMIN_TOKEN` to a long random string (`openssl rand -hex 32`).
+  `/api/orders` and `/api/analytics/*` return 404 without
+  `Authorization: Bearer <ADMIN_TOKEN>`, because they contain customer data. Example:
+  `curl -H "Authorization: Bearer $TOKEN" https://sujoodmats.com/api/orders`
 
 ---
 

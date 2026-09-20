@@ -18,7 +18,7 @@ export const woolPrayerMats: SeoPage = {
   updated: "2026-09-17",
   cardTitle: "Wool prayer mats",
   cardBlurb: "Handwoven & natural",
-  related: ["/islamic-geometric-patterns-prayer-mats/", "/prayer-mat-materials-compared/", "/how-to-clean-a-prayer-mat/", "/prayer-mat-guide/"],
+  related: ["/islamic-geometric-patterns-prayer-mats/", "/prayer-mat-materials-compared/", "/how-to-clean-a-prayer-mat/", "/prayer-mat-guide/", "/prayer-rugs/"],
   bodyHtml: `
       <h2>Why choose wool</h2>
       <p>

@@ -18,7 +18,7 @@ export const prayerMatGuide: SeoPage = {
   updated: "2026-09-17",
   cardTitle: "How to choose a prayer mat",
   cardBlurb: "The full buying guide",
-  related: ["/orthopedic-prayer-mats/", "/travel-prayer-mats/", "/wool-prayer-mats/", "/prayer-mat-materials-compared/"],
+  related: ["/orthopedic-prayer-mats/", "/travel-prayer-mats/", "/wool-prayer-mats/", "/prayer-mat-materials-compared/", "/prayer-rugs/"],
   bodyHtml: `
       <h2>The three main types of prayer mat</h2>
       <p>

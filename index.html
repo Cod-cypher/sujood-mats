@@ -4,16 +4,42 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-5XDYZ75YQF"></script>
+    <!-- Google tag (gtag.js). Hits queue in dataLayer straight away; the 170 KB library
+         itself loads on first interaction or 5s after load, so it never delays first paint.
+         Keep in sync with src/seo/layout.ts. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag() { dataLayer.push(arguments); }
       gtag('js', new Date());
       gtag('config', 'G-5XDYZ75YQF');
+      (function () {
+        var done = false, events = ['pointerdown', 'keydown', 'touchstart', 'scroll'];
+        function load() {
+          if (done) return;
+          done = true;
+          events.forEach(function (e) { removeEventListener(e, load); });
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=G-5XDYZ75YQF';
+          document.head.appendChild(s);
+        }
+        events.forEach(function (e) { addEventListener(e, load, { passive: true, once: true }); });
+        addEventListener('load', function () { setTimeout(load, 5000); });
+      })();
     </script>
 
     <link rel="icon" type="image/png" href="/favicon-64.png" />
+
+    <!-- The hero photo is the LCP element: fetch it first. Keep imagesizes in sync
+         with HERO_IMAGE_SIZES in src/App.tsx. -->
+    <link
+      rel="preload"
+      as="image"
+      type="image/webp"
+      fetchpriority="high"
+      imagesrcset="/images/rawdah_mat_1782347244248-480.webp 480w, /images/rawdah_mat_1782347244248-720.webp 720w, /images/rawdah_mat_1782347244248-1200.webp 1200w"
+      imagesizes="(min-width: 1024px) 480px, calc(100vw - 48px)"
+    />
 
     <!-- Primary SEO -->
     <title>Sujood Mats | Buy Comfortable Prayer Mats Online</title>
@@ -59,6 +85,12 @@
             "name": "Sujood Mats",
             "url": "https://sujoodmats.com/",
             "logo": "https://sujoodmats.com/images/logo-og.jpg",
+            "email": "contact@sujoodmats.com",
+            "contactPoint": {
+              "@type": "ContactPoint",
+              "contactType": "customer service",
+              "email": "contact@sujoodmats.com"
+            },
             "description": "Comfortable prayer mats: orthopedic memory-foam, hand-woven wool, and lightweight silk travel mats."
           },
           {
@@ -71,12 +103,13 @@
           {
             "@type": "Product",
             "name": "The Rawdah Orthopedic Prayer Mat",
+            "url": "https://sujoodmats.com/products/rawdah-orthopedic/",
             "image": "https://sujoodmats.com/images/rawdah_mat_1782347244248.jpg",
             "description": "Orthopedic memory-foam prayer mat with a 12mm dual-density core that cushions the knees, ankles, and forehead during prayer.",
             "brand": { "@type": "Brand", "name": "Sujood Mats" },
             "offers": {
               "@type": "Offer",
-              "url": "https://sujoodmats.com/#product-rawdah-ortho",
+              "url": "https://sujoodmats.com/products/rawdah-orthopedic/",
               "priceCurrency": "USD",
               "price": "185",
               "availability": "https://schema.org/InStock"
@@ -85,12 +118,13 @@
           {
             "@type": "Product",
             "name": "The Silk Route Travel Prayer Mat",
+            "url": "https://sujoodmats.com/products/silk-route-travel/",
             "image": "https://sujoodmats.com/images/silk_route_mat_1782347264817.jpg",
             "description": "Lightweight silk-and-cotton travel prayer mat that folds flat for carry-on luggage.",
             "brand": { "@type": "Brand", "name": "Sujood Mats" },
             "offers": {
               "@type": "Offer",
-              "url": "https://sujoodmats.com/#product-silk-route",
+              "url": "https://sujoodmats.com/products/silk-route-travel/",
               "priceCurrency": "USD",
               "price": "145",
               "availability": "https://schema.org/InStock"
@@ -99,12 +133,13 @@
           {
             "@type": "Product",
             "name": "The Andalusia Flatweave Prayer Mat",
+            "url": "https://sujoodmats.com/products/andalusia-flatweave/",
             "image": "https://sujoodmats.com/images/andalusia_mat_1782347287649.jpg",
             "description": "Hand-spun 100% wool flatweave prayer mat with traditional Islamic geometric star patterns.",
             "brand": { "@type": "Brand", "name": "Sujood Mats" },
             "offers": {
               "@type": "Offer",
-              "url": "https://sujoodmats.com/#product-andalusia-wool",
+              "url": "https://sujoodmats.com/products/andalusia-flatweave/",
               "priceCurrency": "USD",
               "price": "210",
               "availability": "https://schema.org/InStock"

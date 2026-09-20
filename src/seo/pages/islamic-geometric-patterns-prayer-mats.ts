@@ -15,7 +15,7 @@ export const islamicGeometricPatternsPrayerMats: SeoPage = {
   lede:
     "Many prayer mats share the same visual language: an arch at one end and geometric patterns across the field. Here is where those designs come from and what they are often understood to express.",
   schema: "article",
-  updated: "2026-09-17",
+  updated: "2026-09-20",
   cardTitle: "Prayer mat designs & patterns",
   cardBlurb: "Mihrab arches & geometry",
   related: ["/wool-prayer-mats/", "/prayer-mat-gifts/", "/prayer-mat-guide/", "/prayer-mat-materials-compared/"],
@@ -29,7 +29,7 @@ export const islamicGeometricPatternsPrayerMats: SeoPage = {
       </p>
       <p>
         The arch is a design, not a requirement: prayer is valid on any clean surface. But it is one
-        of the most recognisable and loved features of the prayer rug, and it turns an ordinary
+        of the most recognisable and loved features of the <a href="/prayer-rugs/">prayer rug</a>, and it turns an ordinary
         piece of fabric into a small, dedicated space.
       </p>
 

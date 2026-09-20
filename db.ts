@@ -93,7 +93,7 @@ export interface SaveOrderInput {
   subtotal: number;
   discount: number;
   total: number;
-  estimatedDelivery: string;
+  estimatedDelivery?: string | null;
 }
 
 // JSON helper: Prisma wants Prisma.JsonNull (not JS null) to store SQL NULL.
@@ -278,7 +278,11 @@ export async function saveOrder(input: SaveOrderInput): Promise<void> {
         subtotal: input.subtotal,
         discount: input.discount,
         total: input.total,
-        estimatedDelivery: input.estimatedDelivery,
+        // Checkout takes no payment: the order waits for a manually sent invoice.
+        // Set explicitly because the column defaults predate that flow ("paid").
+        status: "AWAITING PAYMENT",
+        paymentStatus: "unpaid",
+        estimatedDelivery: input.estimatedDelivery ?? null,
         items: {
           create: input.cartItems.map((item) => ({
             productId: item.productId ?? "custom",

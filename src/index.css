@@ -1,5 +1,28 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
+
+/* Self-hosted variable fonts (latin subset, SIL Open Font License) in public/fonts.
+   One file per family covers every weight; text shows in the fallback font until they load. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/inter-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Playfair Display";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/playfair-display-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin.woff2") format("woff2");
+}
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -30,6 +53,11 @@ body {
   color: var(--color-spruce-900);
   font-family: var(--font-sans);
   overflow-x: hidden;
+}
+
+/* Keep "/#section" targets clear of the 80px sticky header. */
+[id$="-section"] {
+  scroll-margin-top: 6rem;
 }
 
 /* Smooth custom scrollbar for luxury tactile feel */

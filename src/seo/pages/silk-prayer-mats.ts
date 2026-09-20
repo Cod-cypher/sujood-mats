@@ -18,7 +18,7 @@ export const silkPrayerMats: SeoPage = {
   updated: "2026-09-17",
   cardTitle: "Silk prayer mats",
   cardBlurb: "Smooth, light & refined",
-  related: ["/travel-prayer-mats/", "/prayer-mat-materials-compared/", "/how-to-clean-a-prayer-mat/", "/prayer-mat-gifts/"],
+  related: ["/travel-prayer-mats/", "/prayer-mat-materials-compared/", "/how-to-clean-a-prayer-mat/", "/prayer-mat-gifts/", "/prayer-rugs/"],
   bodyHtml: `
       <h2>What silk feels like underfoot</h2>
       <p>

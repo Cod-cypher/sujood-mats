@@ -15,7 +15,7 @@ export const prayerMatMaterialsCompared: SeoPage = {
   lede:
     "The material decides how a prayer mat feels, how long it lasts and where it works best. Here are the three main options side by side.",
   schema: "article",
-  updated: "2026-09-17",
+  updated: "2026-09-20",
   cardTitle: "Prayer mat materials compared",
   cardBlurb: "Foam vs wool vs silk",
   related: ["/prayer-mat-guide/", "/prayer-mat-thickness/", "/wool-prayer-mats/", "/silk-prayer-mats/"],
@@ -51,7 +51,7 @@ export const prayerMatMaterialsCompared: SeoPage = {
 
       <h2>Wool</h2>
       <p>
-        Wool is the traditional material for prayer rugs. It is hard-wearing, insulates well on cold
+        Wool is the traditional material for <a href="/prayer-rugs/">prayer rugs</a>. It is hard-wearing, insulates well on cold
         tile and stone, and the natural lanolin in the fibre helps it resist dust and dirt. A
         hand-woven wool flatweave has body without being a cushion, and it carries woven patterns
         crisply. It tends to look better with age rather than worse.

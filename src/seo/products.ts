@@ -8,12 +8,12 @@
 
 import { PRODUCTS } from "../data";
 import type { PrayerMatProduct } from "../types";
+import { webpSrcSet } from "../images";
 import { esc } from "./escape";
-import { SITE_NAME, absoluteUrl } from "./site";
+import { SITE_NAME, absoluteUrl, productPath } from "./site";
 import type { Faq, SeoPage } from "./types";
 
 interface ProductSeo {
-  slug: string;
   title: string;
   description: string;
   kicker: string;
@@ -26,7 +26,6 @@ interface ProductSeo {
 
 export const PRODUCT_SEO: Record<string, ProductSeo> = {
   "rawdah-ortho": {
-    slug: "rawdah-orthopedic",
     title: "Rawdah Orthopedic Memory Foam Prayer Mat (12mm) | Sujood Mats",
     description:
       "The Rawdah Orthopedic prayer mat: a 12mm dual-density memory-foam core, soft velvet cover and non-slip rubber underlay for knee and ankle comfort. 120 × 70cm.",
@@ -59,7 +58,6 @@ export const PRODUCT_SEO: Record<string, ProductSeo> = {
     ],
   },
   "silk-route": {
-    slug: "silk-route-travel",
     title: "Silk Route Travel Prayer Mat: 3mm, 420g, Folds Flat | Sujood Mats",
     description:
       "The Silk Route travel prayer mat: a 3mm mulberry silk and Egyptian cotton flatweave that weighs 420 grams and packs into a leather travel sleeve. 115 × 65cm.",
@@ -90,7 +88,6 @@ export const PRODUCT_SEO: Record<string, ProductSeo> = {
     ],
   },
   "andalusia-wool": {
-    slug: "andalusia-flatweave",
     title: "Andalusia Hand-Spun Wool Prayer Mat (Flatweave) | Sujood Mats",
     description:
       "The Andalusia Flatweave: a hand-spun 100% Pakistani wool prayer mat with Islamic geometric star patterns, vegetable dyes and braided tassels. 125 × 75cm, 8mm.",
@@ -124,16 +121,14 @@ export const PRODUCT_SEO: Record<string, ProductSeo> = {
   },
 };
 
-export const productPath = (productId: string) => `/products/${PRODUCT_SEO[productId].slug}/`;
-
 function buildProductPage(p: PrayerMatProduct): SeoPage {
   const seo = PRODUCT_SEO[p.id];
-  const path = productPath(p.id);
+  const path = productPath(p.slug);
   const images = p.colorways.map((c) => c.imageUrl ?? p.imageUrl);
 
   const bodyHtml = `
       <div class="product-hero">
-        <img src="${esc(p.imageUrl)}" width="1200" height="896" alt="${esc(`${p.name} prayer mat in ${p.colorways[0].name}`)}" />
+        <img src="${esc(p.imageUrl)}" srcset="${esc(webpSrcSet(p.imageUrl))}" sizes="(min-width: 760px) 712px, calc(100vw - 48px)" width="1200" height="896" fetchpriority="high" alt="${esc(`${p.name} prayer mat in ${p.colorways[0].name}`)}" />
       </div>
 
       <p class="price"><strong>$${esc(p.price)}</strong> USD</p>
@@ -164,7 +159,7 @@ ${p.highlights.map((h) => `        <li>${esc(h)}</li>`).join("\n")}
 ${p.colorways
   .map(
     (c) => `        <figure>
-          <img src="${esc(c.imageUrl ?? p.imageUrl)}" width="1200" height="896" loading="lazy" alt="${esc(`${p.name} in ${c.name}`)}" />
+          <img src="${esc(c.imageUrl ?? p.imageUrl)}" srcset="${esc(webpSrcSet(c.imageUrl ?? p.imageUrl))}" sizes="(min-width: 760px) 230px, 50vw" width="1200" height="896" loading="lazy" decoding="async" alt="${esc(`${p.name} in ${c.name}`)}" />
           <figcaption>${esc(c.name)}</figcaption>
         </figure>`
   )

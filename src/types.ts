@@ -5,6 +5,8 @@
 
 export interface PrayerMatProduct {
   id: string;
+  /** URL slug of the product page: /products/<slug>/. */
+  slug: string;
   name: string;
   tagline: string;
   price: number;

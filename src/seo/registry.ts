@@ -25,8 +25,9 @@ import { prayerMatsForElderly } from "./pages/prayer-mats-for-elderly";
 import { howToCleanAPrayerMat } from "./pages/how-to-clean-a-prayer-mat";
 import { prayerMatGifts } from "./pages/prayer-mat-gifts";
 import { islamicGeometricPatternsPrayerMats } from "./pages/islamic-geometric-patterns-prayer-mats";
+import { prayerRugs } from "./pages/prayer-rugs";
 
-export const HOME_UPDATED = "2026-09-17";
+export const HOME_UPDATED = "2026-09-20";
 
 const GUIDES: SeoPage[] = [
   prayerMatGuide,
@@ -42,6 +43,7 @@ const GUIDES: SeoPage[] = [
   howToCleanAPrayerMat,
   prayerMatGifts,
   islamicGeometricPatternsPrayerMats,
+  prayerRugs,
 ];
 
 const cardList = (pages: SeoPage[]) =>
@@ -66,7 +68,7 @@ const guidesHub: SeoPage = {
   faqs: [],
   bodyHtml: `
       <h2>Start here</h2>
-${cardList([prayerMatGuide, prayerMatMaterialsCompared])}
+${cardList([prayerMatGuide, prayerMatMaterialsCompared, prayerRugs])}
 
       <h2>By type &amp; material</h2>
 ${cardList([orthopedicPrayerMats, woolPrayerMats, silkPrayerMats, travelPrayerMats])}

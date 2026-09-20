@@ -7,6 +7,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { ArrowUpRight, Activity, Globe, Feather, Check, ShoppingBag, Eye } from "lucide-react";
 import { PRODUCTS } from "../data";
+import { productPath } from "../seo/site";
+import { webpSrcSet, PRODUCT_IMAGE_SIZES } from "../images";
 import { CartItem } from "../types";
 import { track } from "../analytics";
 
@@ -93,7 +95,13 @@ export default function ProductCatalog({ onAddToCart }: ProductCatalogProps) {
             >
               <img
                 src={activeColorway.imageUrl || p.imageUrl}
-                alt={p.name}
+                srcSet={webpSrcSet(activeColorway.imageUrl || p.imageUrl)}
+                sizes={PRODUCT_IMAGE_SIZES}
+                width="1200"
+                height="896"
+                loading="lazy"
+                decoding="async"
+                alt={`${p.name} prayer mat in ${activeColorway.name}`}
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700 ease-out"
               />
@@ -125,7 +133,9 @@ export default function ProductCatalog({ onAddToCart }: ProductCatalogProps) {
                   <span className="text-[10px] font-mono tracking-widest uppercase">{p.tagline}</span>
                 </div>
                 <h3 className="font-serif text-3xl md:text-4xl text-spruce-950 font-semibold tracking-tight leading-none">
-                  {p.name}
+                  <a href={productPath(p.slug)} className="hover:text-clay-accent transition-colors">
+                    {p.name}
+                  </a>
                 </h3>
               </div>
 
@@ -138,6 +148,13 @@ export default function ProductCatalog({ onAddToCart }: ProductCatalogProps) {
                 <p className="text-sm text-spruce-700 font-sans leading-relaxed text-pretty max-w-prose">
                   {p.description}
                 </p>
+                <a
+                  href={productPath(p.slug)}
+                  className="inline-flex items-center space-x-1 text-xs font-mono tracking-wider text-clay-accent hover:text-spruce-950 transition-colors"
+                >
+                  <span>Full details &amp; specifications</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </a>
               </div>
 
               {/* Technical Specifications (Monospace formatting for authenticity) */}

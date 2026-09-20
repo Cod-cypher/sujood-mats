@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Trash2, ShieldCheck, ArrowRight, HeartHandshake, CheckCircle2, ShoppingBag } from "lucide-react";
+import { X, Trash2, ShieldCheck, ArrowRight, HeartHandshake, CheckCircle2, ShoppingBag, AlertTriangle } from "lucide-react";
 import { CartItem } from "../types";
+import { CONTACT_EMAIL } from "../seo/site";
 import { track, syncCart, getSessionId, getCartId, resetCartId } from "../analytics";
 import { apiUrl } from "../config";
 
@@ -33,19 +34,26 @@ export default function Cart({
     address: "",
     city: "",
     postalCode: "",
+    country: "",
   });
 
   const [step, setStep] = useState<"review" | "shipping" | "confirmation">("review");
   const [isLoading, setIsLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [orderConfirmation, setOrderConfirmation] = useState<{
     orderId: string;
     total: number;
-    estimatedDelivery: string;
-    message: string;
+    email: string;
+    emailSent: boolean;
   } | null>(null);
 
+  // A finished order's confirmation screen must not mask a newly started cart.
+  useEffect(() => {
+    if (step === "confirmation" && cartItems.length > 0) setStep("review");
+  }, [step, cartItems.length]);
+
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  
+
   // Custom discount for companion sets (multiple mats)
   const bundleDiscount = cartItems.length > 1 ? 25 : 0;
   const grandTotal = Math.max(0, subtotal - bundleDiscount);
@@ -56,14 +64,6 @@ export default function Cart({
   };
 
   // Location context we can capture without a permission prompt.
-  const localeCountry = () => {
-    try {
-      const loc = new Intl.Locale(navigator.language) as any;
-      return loc.maximize?.().region ?? loc.region ?? undefined;
-    } catch {
-      return undefined;
-    }
-  };
   const timezone = () => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -76,6 +76,7 @@ export default function Cart({
     e.preventDefault();
     if (!customerInfo.name || !customerInfo.email || !customerInfo.address) return;
 
+    setCheckoutError(null);
     setIsLoading(true);
     const cartId = getCartId();
     try {
@@ -85,19 +86,18 @@ export default function Cart({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cartItems,
-          customerInfo: {
-            ...customerInfo,
-            country: localeCountry(),
-            timezone: timezone(),
-          },
+          customerInfo: { ...customerInfo, timezone: timezone() },
           sessionId: getSessionId(),
           cartId,
         }),
       });
 
-      if (!response.ok) throw new Error("Checkout failed.");
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.orderId) {
+        setCheckoutError(data?.error ?? "Something went wrong placing your order. Please try again.");
+        return;
+      }
 
-      const data = await response.json();
       track("purchase", { cartId, orderId: data.orderId, value: data.total });
       resetCartId(); // next add-to-cart starts a fresh cart
       setOrderConfirmation(data);
@@ -105,7 +105,7 @@ export default function Cart({
       onClearCart(); // empty local cart on success
     } catch (err) {
       console.error(err);
-      alert("Something went wrong placing your order. Please try again.");
+      setCheckoutError("We couldn't reach the server. Please check your connection and try again.");
     } finally {
       setIsLoading(false);
     }
@@ -139,7 +139,7 @@ export default function Cart({
               <div className="flex items-center space-x-2">
                 <ShoppingBag className="w-5 h-5 text-clay-ochre" />
                 <h3 className="font-serif text-lg tracking-wide">
-                  {step === "confirmation" ? "Order Confirmed" : "Your Cart"}
+                  {step === "confirmation" ? "Order Received" : "Your Cart"}
                 </h3>
               </div>
               <button
@@ -351,13 +351,33 @@ export default function Cart({
                       </div>
                     </div>
 
-                    {/* Security promise */}
-                    <div className="p-3 bg-spruce-50 border border-spruce-100 rounded-lg text-[11px] text-spruce-600 leading-relaxed flex items-start space-x-2.5 mt-4">
-                      <ShieldCheck className="w-4.5 h-4.5 text-spruce-700 flex-shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono text-spruce-400 block">COUNTRY</label>
+                      <input
+                        required
+                        type="text"
+                        name="country"
+                        autoComplete="country-name"
+                        value={customerInfo.country}
+                        onChange={handleInputChange}
+                        placeholder="United States"
+                        className="w-full px-4 py-2 text-xs border border-spruce-200 rounded-lg bg-spruce-50 text-spruce-950 focus:outline-hidden focus:ring-1 focus:ring-clay-ochre focus:border-clay-ochre"
+                      />
+                    </div>
+
+                    {/* How payment works */}
+                    <div className="p-3 bg-spruce-50 border border-spruce-100 rounded-lg text-[11px] text-spruce-700 leading-relaxed flex items-start space-x-2.5 mt-4">
+                      <ShieldCheck className="w-4.5 h-4.5 text-clay-ochre flex-shrink-0 mt-0.5" />
                       <span>
-                        This is a demo checkout. No payment is processed and no real funds are moved.
+                        <strong className="text-spruce-950">No payment is taken now.</strong> After you place your order we'll email you an invoice for ${grandTotal} USD. Your order is confirmed once that invoice is paid.
                       </span>
                     </div>
+
+                    {checkoutError && (
+                      <div role="alert" className="p-3 border border-red-500/40 bg-red-500/10 rounded-lg text-[11px] text-red-200 leading-relaxed">
+                        {checkoutError}
+                      </div>
+                    )}
 
                     <button
                       type="submit"
@@ -375,42 +395,51 @@ export default function Cart({
                     key="confirmation"
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="text-center py-8 space-y-6"
+                    className="py-6 space-y-5"
                   >
-                    <div className="flex flex-col items-center">
-                      <CheckCircle2 className="w-12 h-12 text-spruce-900 animate-pulse" />
-                      <h4 className="font-serif text-2xl font-bold text-spruce-950 tracking-tight mt-4">Order Received</h4>
+                    <div className="flex flex-col items-center text-center">
+                      <CheckCircle2 className="w-12 h-12 text-clay-ochre" />
+                      <h4 className="font-serif text-2xl font-bold text-spruce-950 tracking-tight mt-4">Order received</h4>
                       <p className="text-xs text-spruce-400 font-mono tracking-widest mt-1 uppercase">
-                        RECEIPT: {orderConfirmation.orderId}
+                        ORDER: {orderConfirmation.orderId}
                       </p>
                     </div>
 
-                    <div className="bg-spruce-800 p-5 border border-spruce-100 rounded-xl space-y-4 text-left shadow-xs">
-                      <p className="text-xs text-spruce-800 leading-relaxed font-serif">
-                        &ldquo;{orderConfirmation.message}&rdquo;
+                    {/* The one thing the customer must not miss. */}
+                    <div role="status" className="p-4 border border-clay-ochre bg-clay-ochre/10 rounded-xl text-left space-y-1.5">
+                      <div className="flex items-center space-x-2 text-clay-accent">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                        <h5 className="text-sm font-bold">Your order is not confirmed yet</h5>
+                      </div>
+                      <p className="text-xs text-spruce-900 leading-relaxed">
+                        No payment has been taken. Your order is confirmed only once you pay the invoice we email you.
                       </p>
+                    </div>
 
-                      <div className="border-t border-spruce-50 pt-3 space-y-2 text-xs font-mono">
+                    <div className="bg-spruce-800 p-5 border border-spruce-100 rounded-xl text-left shadow-xs space-y-3">
+                      <h5 className="text-[10px] font-mono uppercase text-spruce-600 tracking-wider">What happens next</h5>
+                      <ol className="space-y-2.5 text-xs text-spruce-900 leading-relaxed list-decimal pl-4">
+                        <li>
+                          {orderConfirmation.emailSent ? (
+                            <>We've sent a confirmation of your order to <strong className="text-spruce-950 break-all">{orderConfirmation.email}</strong>. Check your spam folder if you don't see it.</>
+                          ) : (
+                            <>We saved your order but couldn't send the confirmation email to <strong className="text-spruce-950 break-all">{orderConfirmation.email}</strong>. Please email <a href={`mailto:${CONTACT_EMAIL}`} className="text-clay-accent underline">{CONTACT_EMAIL}</a> with your order number.</>
+                          )}
+                        </li>
+                        <li>We'll email you an <strong className="text-spruce-950">invoice for ${orderConfirmation.total} USD</strong> in a separate message.</li>
+                        <li>Pay the invoice. Once your payment is received, your order is confirmed and we prepare it for shipping.</li>
+                      </ol>
+
+                      <div className="border-t border-spruce-100 pt-3 space-y-2 text-xs font-mono">
                         <div className="flex justify-between">
-                          <span className="text-spruce-400">TOTAL PAID:</span>
+                          <span className="text-spruce-400">TOTAL DUE ON INVOICE:</span>
                           <span className="text-spruce-900 font-bold">${orderConfirmation.total} USD</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-spruce-400">ESTIMATED DELIVERY:</span>
-                          <span className="text-spruce-900 font-medium">{orderConfirmation.estimatedDelivery}</span>
-                        </div>
-                        <div className="flex justify-between">
                           <span className="text-spruce-400">STATUS:</span>
-                          <span className="text-clay-accent font-semibold">PROCESSING</span>
+                          <span className="text-clay-accent font-semibold">AWAITING PAYMENT</span>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="p-3.5 bg-spruce-50 border border-spruce-100 rounded-lg text-left space-y-1">
-                      <h5 className="text-[10px] font-mono uppercase text-spruce-700 tracking-wider">What happens next?</h5>
-                      <p className="text-[10px] text-spruce-600 leading-relaxed">
-                        We'll prepare and pack your order, then email you tracking updates as it ships.
-                      </p>
                     </div>
 
                     <button
