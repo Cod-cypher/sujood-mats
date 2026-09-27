@@ -124,6 +124,11 @@ export async function createStripePayment(o: StripePaymentInput): Promise<{ id: 
       // Cards only, which includes Apple Pay and Google Pay. Nothing here redirects the
       // buyer away from the checkout.
       payment_method_types: { 0: "card" },
+      // Ask the buyer's bank to approve the payment (3D Secure) whenever the card has it.
+      // Left to itself Stripe only asks where the law requires it, and banks elsewhere
+      // (Pakistan, for one) decline a payment that arrives without it. A card without 3D
+      // Secure is charged as before.
+      payment_method_options: { card: { request_three_d_secure: "any" } },
       description: `Sujood Mats order ${o.orderId}`,
       // In live mode Stripe emails its own receipt to this address as well as ours.
       receipt_email: c.email,
