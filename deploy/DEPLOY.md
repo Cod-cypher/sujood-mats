@@ -70,14 +70,59 @@ EOF
 - Add `GEMINI_API_KEY="..."` if you want the AI advisor live; otherwise it runs in
   offline fallback mode.
 - **Order emails:** add `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SALES_EMAIL` and
-  `SALES_PASSWORD` (see `.env.example`). Checkout takes no payment: it emails the customer
-  that an invoice will follow and notifies sales (cc set by `ORDER_NOTIFY_CC`). Without
-  these, orders are still saved but **nobody is emailed**, so check `pm2 logs sujood` for
-  `[mailer]` warnings after the first deploy.
+  `SALES_PASSWORD` (see `.env.example`). The customer gets a confirmation (or, for an
+  invoice order, a note that an invoice will follow) and sales is notified (cc set by
+  `ORDER_NOTIFY_CC`). Without these, orders are still saved but **nobody is emailed**, so
+  check `pm2 logs sujood` for `[mailer]` lines after the first deploy: every send is logged.
+- **Taking payment:** see [Payments](#payments-stripe-and-paypal) below. Until payment keys
+  are added, checkout takes orders by invoice only.
 - **Viewing orders:** set `ADMIN_TOKEN` to a long random string (`openssl rand -hex 32`).
   `/api/orders` and `/api/analytics/*` return 404 without
   `Authorization: Bearer <ADMIN_TOKEN>`, because they contain customer data. Example:
   `curl -H "Authorization: Bearer $TOKEN" https://sujoodmats.com/api/orders`
+
+---
+
+## Payments (Stripe and PayPal)
+
+Card payment (Stripe) and PayPal each switch on when their keys are in the server `.env`.
+With neither set, checkout falls back to ordering by invoice.
+
+**Use LIVE keys on the server, never test or sandbox keys.** With test keys the public site
+would accept Stripe's published test card numbers and mark those orders as paid, without any
+money moving.
+
+```bash
+# Stripe: https://dashboard.stripe.com/apikeys (with "Test mode" switched OFF)
+STRIPE_SECRET_KEY="sk_live_..."
+STRIPE_PUBLISHABLE_KEY="pk_live_..."
+STRIPE_WEBHOOK_SECRET="whsec_..."      # see step 2 below
+
+# PayPal: https://developer.paypal.com/dashboard/applications/live (a LIVE app)
+PAYPAL_CLIENT_ID="..."
+PAYPAL_SECRET_KEY="..."
+PAYPAL_BASE_URL="https://api-m.paypal.com"
+```
+
+Then, once, in the Stripe dashboard:
+
+1. **Payment method domains** (Settings -> Payment methods -> Payment method domains): add
+   `sujoodmats.com` and `www.sujoodmats.com`. Apple Pay and Google Pay only appear in the
+   card form on registered domains.
+2. **Webhook** (Developers -> Webhooks -> Add endpoint): URL
+   `https://sujoodmats.com/api/payments/stripe/webhook`, events `payment_intent.succeeded`
+   and `payment_intent.processing`. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+   This marks an order paid even if the buyer's browser closes the moment the card goes
+   through.
+
+After changing `.env`, run `pm2 restart sujood`. To confirm what the site is using:
+
+```bash
+curl -s https://sujoodmats.com/api/payments/config
+# expect "test":false for stripe and "sandbox":false for paypal
+```
+
+No database migration is needed for payments.
 
 ---
 

@@ -15,6 +15,7 @@ import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import {
   saveOrder,
+  markOrderPaid,
   getOrder,
   listOrders,
   upsertSession,
@@ -35,6 +36,19 @@ import { renderSitemap } from "./src/seo/sitemap";
 import { renderLlmsTxt } from "./src/seo/llms";
 import { PRODUCTS } from "./src/data";
 import { sendOrderEmails } from "./mailer";
+import { renderPaymentReturnPage } from "./paymentReturnPage";
+import { paypalConfigured, paypalPublicConfig, createPayPalOrder, getPayPalOrder, capturePayPalOrder, PayPalError } from "./paypal";
+import {
+  stripeConfigured,
+  stripePublicConfig,
+  stripeWebhookConfigured,
+  createStripePayment,
+  getStripePayment,
+  cancelStripePayment,
+  readStripeWebhook,
+  toCents,
+  StripeError,
+} from "./stripe";
 
 dotenv.config();
 
@@ -63,7 +77,14 @@ app.use(
   })
 );
 
-app.use(express.json());
+// The raw bytes are kept for the one route that must check a signature over them.
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      if (req.url?.startsWith("/api/payments/stripe/webhook")) (req as any).rawBody = buf;
+    },
+  })
+);
 
 // ---------------------- ANALYTICS HELPERS ----------------------
 
@@ -282,13 +303,15 @@ const MAX_QUANTITY = 20;
 const cleanField = (v: unknown, max: number) =>
   typeof v === "string" ? v.replace(/[\r\n\t]+/g, " ").trim().slice(0, max) : "";
 
-app.post("/api/checkout", async (req, res) => {
-  const { cartItems, customerInfo, sessionId, cartId } = req.body ?? {};
+// Validates a checkout request and prices it. Shared by the invoice and PayPal routes so
+// both charge exactly the same amount for the same cart.
+function parseCheckout(body: any) {
+  const { cartItems, customerInfo } = body ?? {};
   if (!Array.isArray(cartItems) || cartItems.length === 0) {
-    return res.status(400).json({ error: "Your cart is empty." });
+    return { error: "Your cart is empty." } as const;
   }
   if (cartItems.length > 20) {
-    return res.status(400).json({ error: "Too many items in one order. Please contact us for bulk orders." });
+    return { error: "Too many items in one order. Please contact us for bulk orders." } as const;
   }
 
   const customer = {
@@ -296,14 +319,18 @@ app.post("/api/checkout", async (req, res) => {
     email: cleanField(customerInfo?.email, 254).toLowerCase(),
     address: cleanField(customerInfo?.address, 200),
     city: cleanField(customerInfo?.city, 120),
+    // Optional: not every country has states or provinces.
+    region: cleanField(customerInfo?.region, 120) || undefined,
     postalCode: cleanField(customerInfo?.postalCode, 20),
     country: cleanField(customerInfo?.country, 80),
   };
+  // ISO code of that country, when the checkout's country list supplied one.
+  const countryCode = /^[A-Z]{2}$/.test(customerInfo?.countryCode ?? "") ? (customerInfo.countryCode as string) : undefined;
   if (!customer.name || !customer.address || !customer.city || !customer.postalCode || !customer.country) {
-    return res.status(400).json({ error: "Please fill in your full shipping address." });
+    return { error: "Please fill in your full shipping address." } as const;
   }
   if (!EMAIL_RE.test(customer.email)) {
-    return res.status(400).json({ error: "Please enter a valid email address." });
+    return { error: "Please enter a valid email address." } as const;
   }
 
   // Price the order from our own catalogue: never trust names or prices from the browser.
@@ -313,7 +340,7 @@ app.post("/api/checkout", async (req, res) => {
     const colorway = product?.colorways.find((c) => c.name === item?.colorway);
     const quantity = Number(item?.quantity);
     if (!product || !colorway || !Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY) {
-      return res.status(400).json({ error: "Something in your cart is no longer available. Please refresh and try again." });
+      return { error: "Something in your cart is no longer available. Please refresh and try again." } as const;
     }
     lineItems.push({
       productId: product.id,
@@ -325,16 +352,28 @@ app.post("/api/checkout", async (req, res) => {
     });
   }
 
+  const subtotal = lineItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  // Mirror the frontend's companion-bundle discount so persisted money reconciles.
+  const discount = lineItems.length > 1 ? 25 : 0;
+  const total = Math.max(0, subtotal - discount);
+
+  return { customer, countryCode, timezone: cleanField(customerInfo?.timezone, 64) || undefined, lineItems, subtotal, discount, total };
+}
+
+const newOrderId = () => `SUJOOD-${new Date().getFullYear()}-${crypto.randomInt(100000, 1000000)}`;
+
+app.post("/api/checkout", async (req, res) => {
+  const { sessionId, cartId } = req.body ?? {};
+  const parsed = parseCheckout(req.body);
+  if ("error" in parsed) return res.status(400).json({ error: parsed.error });
+  const { customer, lineItems, subtotal, discount, total } = parsed;
+
   const ipAddress = getClientIp(req);
   if (!checkoutAllowed(ipAddress)) {
     return res.status(429).json({ error: "Too many orders from this connection. Please try again later or email us." });
   }
 
-  const orderId = `SUJOOD-${new Date().getFullYear()}-${crypto.randomInt(100000, 1000000)}`;
-  const subtotal = lineItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  // Mirror the frontend's companion-bundle discount so persisted money reconciles.
-  const discount = lineItems.length > 1 ? 25 : 0;
-  const total = Math.max(0, subtotal - discount);
+  const orderId = newOrderId();
 
   try {
     await saveOrder({
@@ -342,7 +381,7 @@ app.post("/api/checkout", async (req, res) => {
       sessionId: sessionId ?? null,
       cartId: cartId ?? null,
       ipAddress,
-      customerInfo: { ...customer, timezone: cleanField(customerInfo?.timezone, 64) || undefined },
+      customerInfo: { ...customer, timezone: parsed.timezone },
       cartItems: lineItems,
       subtotal,
       discount,
@@ -370,6 +409,276 @@ app.post("/api/checkout", async (req, res) => {
   });
 
   res.json({ success: true, orderId, total, email: customer.email, emailSent: sent.customer });
+});
+
+// ---------------------- ONLINE PAYMENT (PAYPAL, STRIPE) ----------------------
+// Pay-now alternatives to the invoice flow, each active only while its env vars are set.
+//   1. start: price the cart, save the order as "pending", and open a PayPal order / Stripe
+//      PaymentIntent for it.
+//   2. The buyer pays: by card in Stripe's form embedded in the checkout, or in PayPal's own
+//      window opened by PayPal's button.
+//   3. confirm: PayPal: capture the approved order. Stripe: read the payment back. Then check
+//      the amount, mark the order paid and send the emails.
+// The order row exists before any money moves, so a payment can never arrive without one.
+// Stripe's webhook (optional) runs step 3 as well, for a buyer whose browser closed in between.
+
+type PaymentProvider = "paypal" | "stripe";
+const PROVIDER_NAME: Record<PaymentProvider, string> = { paypal: "PayPal", stripe: "Stripe" };
+const providerConfigured = (p: PaymentProvider) => (p === "paypal" ? paypalConfigured() : stripeConfigured());
+const providerParam = (v: unknown): PaymentProvider | null => (v === "paypal" || v === "stripe" ? v : null);
+
+// Tells the checkout which pay-now options to offer, with the keys made for browsers.
+app.get("/api/payments/config", (req, res) => {
+  res.set("Cache-Control", "no-store").json({ paypal: paypalPublicConfig(), stripe: stripePublicConfig() });
+});
+
+// No email is sent until a payment succeeds, so this only has to stop order spam. Looser
+// than CHECKOUT_LIMIT because a buyer may retry a declined card several times.
+const PAYMENT_START_LIMIT = 30;
+const paymentStartHits = new Map<string, number[]>();
+function paymentStartAllowed(ip: string): boolean {
+  const now = Date.now();
+  const recent = (paymentStartHits.get(ip) ?? []).filter((t) => now - t < CHECKOUT_WINDOW_MS);
+  const allowed = recent.length < PAYMENT_START_LIMIT;
+  if (allowed) recent.push(now);
+  paymentStartHits.set(ip, recent);
+  return allowed;
+}
+
+// The providers' ids are opaque; the pattern only stops junk reaching their APIs.
+const PAYMENT_ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
+
+app.post("/api/payments/:provider/start", async (req, res) => {
+  const provider = providerParam(req.params.provider);
+  if (!provider || !providerConfigured(provider)) return res.status(404).json({ error: "Not found." });
+  const { sessionId, cartId } = req.body ?? {};
+  const parsed = parseCheckout(req.body);
+  if ("error" in parsed) return res.status(400).json({ error: parsed.error });
+  const { customer, lineItems, subtotal, discount, total } = parsed;
+
+  const ipAddress = getClientIp(req);
+  if (!paymentStartAllowed(ipAddress)) {
+    return res.status(429).json({ error: "Too many payment attempts from this connection. Please try again later or email us." });
+  }
+
+  const orderId = newOrderId();
+  try {
+    await saveOrder({
+      orderId,
+      sessionId: sessionId ?? null,
+      cartId: cartId ?? null,
+      ipAddress,
+      customerInfo: { ...customer, timezone: parsed.timezone },
+      cartItems: lineItems,
+      subtotal,
+      discount,
+      total,
+      awaitingCapture: true,
+    });
+  } catch (error) {
+    console.error(`Failed to persist pending ${PROVIDER_NAME[provider]} order:`, error);
+    return res.status(500).json({ error: "We could not start your order. Please try again." });
+  }
+
+  try {
+    if (provider === "paypal") {
+      // Only used if PayPal has to fall back from its window to a full-page redirect.
+      const returnUrl = `${req.protocol}://${req.get("host")}/paypal/return`;
+      const { id } = await createPayPalOrder({
+        orderId,
+        items: lineItems,
+        subtotal,
+        discount,
+        total,
+        funding: "paypal",
+        returnUrl,
+        cancelUrl: `${returnUrl}?cancelled=1`,
+      });
+      return res.json({ paymentId: id, orderId });
+    }
+    const { id, clientSecret } = await createStripePayment({ orderId, total, customer: { ...customer, countryCode: parsed.countryCode } });
+    res.json({ paymentId: id, clientSecret, orderId, amount: toCents(total) });
+  } catch (error) {
+    console.error(`${PROVIDER_NAME[provider]} start failed for ${orderId}:`, error);
+    res.status(502).json({ error: `We couldn't reach ${PROVIDER_NAME[provider]}. Please try again in a moment.` });
+  }
+});
+
+// What a provider told us about a payment, in one shape.
+interface PaymentOutcome {
+  /** completed = money received. pending = under review. unpaid = buyer has not paid (yet). */
+  status: "completed" | "pending" | "unpaid" | "failed";
+  transactionId: string | null;
+  amount: number | null;
+  currency: string | null;
+  orderId: string | null;
+}
+
+type ConfirmResult = { status: number; body: Record<string, unknown> };
+
+// Step 3 above. Safe to run more than once for the same payment, and from more than one
+// place at a time (the checkout, the return page and the webhook may all ask).
+async function confirmPayment(provider: PaymentProvider, paymentId: string): Promise<ConfirmResult> {
+  const name = PROVIDER_NAME[provider];
+  const fail = (status: number, error: string, extra: Record<string, unknown> = {}): ConfirmResult => ({ status, body: { error, ...extra } });
+
+  // Which of our orders does this payment belong to? Ask the provider, not the browser.
+  let order;
+  try {
+    const linkedOrderId = provider === "paypal" ? (await getPayPalOrder(paymentId)).customId : (await getStripePayment(paymentId)).orderId;
+    order = linkedOrderId ? await getOrder(linkedOrderId) : null;
+  } catch (error) {
+    console.error(`${name} lookup failed for ${paymentId}:`, error);
+    const notFound = (error instanceof PayPalError || error instanceof StripeError) && error.status === 404;
+    if (notFound) return fail(404, "We couldn't find that payment. You have not been charged. Please try again.");
+    return fail(502, `We couldn't reach ${name} to confirm your payment. Please try again.`);
+  }
+  if (!order) return fail(404, "We couldn't find the order for this payment. Please email us before trying again.");
+
+  const done = (paymentState: "paid" | "processing", emailSent: boolean): ConfirmResult => ({
+    status: 200,
+    body: { success: true, orderId: order.id, total: order.total, email: order.customerEmail, emailSent, paymentState, provider },
+  });
+
+  // A repeat of a confirmation we already handled (double click, webhook after the browser).
+  if (order.paymentStatus !== "pending") {
+    return done(order.paymentStatus === "paid" ? "paid" : "processing", true);
+  }
+
+  let outcome: PaymentOutcome;
+  try {
+    if (provider === "paypal") {
+      const capture = await capturePayPalOrder(paymentId);
+      outcome = {
+        status: capture.status === "COMPLETED" ? "completed" : capture.status === "PENDING" ? "pending" : "failed",
+        transactionId: capture.captureId,
+        amount: capture.amount,
+        currency: capture.currency,
+        orderId: capture.customId,
+      };
+      if (outcome.status === "failed") console.error(`PayPal capture for ${order.id} ended as ${capture.status}.`);
+    } else {
+      const p = await getStripePayment(paymentId);
+      outcome = {
+        status: p.status === "succeeded" ? "completed" : p.status === "processing" ? "pending" : p.status === "canceled" ? "failed" : "unpaid",
+        transactionId: p.id,
+        amount: p.amount,
+        currency: p.currency?.toUpperCase() ?? null,
+        orderId: p.orderId,
+      };
+    }
+  } catch (error) {
+    // Not a failure: PayPal's window was closed before the buyer approved anything.
+    if (error instanceof PayPalError && error.issue === "ORDER_NOT_APPROVED") {
+      return fail(409, "This payment has not been approved yet. You have not been charged.", { notApproved: true });
+    }
+    console.error(`${name} confirm failed for ${order.id} (${paymentId}):`, error);
+    try {
+      const issue = error instanceof PayPalError ? error.issue : error instanceof StripeError ? error.code : null;
+      await recordEvent({ sessionId: order.sessionId, eventType: "purchase_failed", value: order.total, cartId: order.cartId, metadata: { orderId: order.id, provider, paymentId, issue } });
+    } catch { /* best-effort */ }
+    if (error instanceof PayPalError && error.issue === "INSTRUMENT_DECLINED") {
+      // PayPal's button reopens its window so the buyer can pick another way to pay.
+      return fail(402, "PayPal declined that payment method and you have not been charged. Please choose another.", { restart: true });
+    }
+    if ((error instanceof PayPalError || error instanceof StripeError) && error.status < 500) {
+      return fail(402, "Your payment was not completed and you have not been charged. Please try again.");
+    }
+    // Timeout or provider outage: we cannot know whether the money moved.
+    return fail(502, `We couldn't confirm your payment with ${name}. Please don't pay again: email us with order number ${order.id} and we'll check it.`);
+  }
+
+  if (outcome.status === "unpaid") {
+    return fail(409, "This payment has not been completed yet. You have not been charged.", { notApproved: true });
+  }
+  if (outcome.status === "failed") {
+    return fail(402, "Your payment was not completed and you have not been charged. Please try again.");
+  }
+
+  // Money is only "paid" when it cleared, for the right order, amount and currency.
+  // Anything else is kept, but flagged for a human to check before shipping.
+  const matches =
+    outcome.orderId === order.id && outcome.currency === "USD" && outcome.amount !== null && Math.abs(outcome.amount - order.total) < 0.005;
+  if (!matches) console.error(`${name.toUpperCase()} PAYMENT MISMATCH for ${order.id}: expected ${order.total} USD, got`, outcome);
+  const paymentState = outcome.status === "completed" && matches ? "paid" : "processing";
+
+  let firstTime = true;
+  try {
+    firstTime = await markOrderPaid(order.id, { provider, providerOrderId: paymentId, captureId: outcome.transactionId, state: paymentState });
+  } catch (error) {
+    // The money is taken, so the customer still gets their confirmation and sales still
+    // gets the email: the order row just needs its status fixing by hand.
+    console.error(`PAID ORDER ${order.id} COULD NOT BE MARKED PAID (${name} transaction ${outcome.transactionId}):`, error);
+  }
+
+  let emailSent = true;
+  if (firstTime) {
+    const sent = await sendOrderEmails({
+      orderId: order.id,
+      placedAt: order.createdAt,
+      customer: {
+        name: order.customerName,
+        email: order.customerEmail,
+        address: order.address ?? "",
+        city: order.city ?? "",
+        region: order.region ?? undefined,
+        postalCode: order.postalCode ?? "",
+        country: order.country ?? "",
+      },
+      items: order.items.map((i) => ({ name: i.name, colorway: i.colorway ?? "", price: i.price, quantity: i.quantity })),
+      subtotal: order.subtotal,
+      discount: order.discount,
+      total: order.total,
+      ipAddress: order.ipAddress ?? undefined,
+      payment: { provider, captureId: outcome.transactionId, state: paymentState },
+    });
+    emailSent = sent.customer;
+  }
+  return done(paymentState, emailSent);
+}
+
+app.post("/api/payments/:provider/confirm", async (req, res) => {
+  const provider = providerParam(req.params.provider);
+  if (!provider || !providerConfigured(provider)) return res.status(404).json({ error: "Not found." });
+  const paymentId = req.body?.paymentId;
+  if (typeof paymentId !== "string" || !PAYMENT_ID_RE.test(paymentId)) {
+    return res.status(400).json({ error: "Missing payment reference." });
+  }
+  const result = await confirmPayment(provider, paymentId);
+  res.status(result.status).json(result.body);
+});
+
+// The buyer changed their cart or details after a card attempt: cancel the old Stripe payment
+// so it can never be completed for an order the checkout has moved on from.
+app.post("/api/payments/stripe/abandon", async (req, res) => {
+  if (!stripeConfigured()) return res.status(404).json({ error: "Not found." });
+  const paymentId = req.body?.paymentId;
+  if (typeof paymentId !== "string" || !PAYMENT_ID_RE.test(paymentId)) return res.status(400).json({ error: "Missing payment reference." });
+  try {
+    await cancelStripePayment(paymentId);
+  } catch (error) {
+    console.error(`Stripe cancel failed for ${paymentId}:`, error);
+  }
+  res.json({ ok: true });
+});
+
+// Stripe tells us about payments itself, so an order is marked paid even if the buyer's
+// browser closed the instant the card went through. Active only while STRIPE_WEBHOOK_SECRET
+// is set; point a Stripe webhook for payment_intent.succeeded at this URL.
+app.post("/api/payments/stripe/webhook", async (req, res) => {
+  if (!stripeConfigured() || !stripeWebhookConfigured()) return res.status(404).json({ error: "Not found." });
+  const event = readStripeWebhook((req as any).rawBody ?? Buffer.alloc(0), req.headers["stripe-signature"] as string | undefined);
+  if (!event) return res.status(400).json({ error: "Invalid signature." });
+
+  const paymentId = event?.data?.object?.id;
+  if ((event.type === "payment_intent.succeeded" || event.type === "payment_intent.processing") && typeof paymentId === "string" && PAYMENT_ID_RE.test(paymentId)) {
+    const result = await confirmPayment("stripe", paymentId);
+    // A 5xx makes Stripe retry later, which is what we want when we could not reach it or
+    // the database. Anything else is final: a payment that is not one of our orders stays so.
+    if (result.status >= 500) return res.status(503).json({ received: false });
+    if (result.status !== 200) console.warn(`Stripe webhook ${event.type} for ${paymentId} was not applied:`, result.body.error);
+  }
+  res.json({ received: true });
 });
 
 // ---------------------- ADMIN-ONLY READ ENDPOINTS ----------------------
@@ -473,6 +782,14 @@ app.get("/api/analytics/events", async (req, res) => {
     console.error("analytics/events failed:", error);
     res.status(500).json({ error: "Could not load events." });
   }
+});
+
+// Where PayPal / Stripe send the buyer if paying took them away from the checkout (PayPal
+// falling back to a full-page redirect, a bank's card verification page). The page finishes
+// the payment and shows the result (see paymentReturnPage.ts).
+app.get(["/paypal/return", "/stripe/return"], (req, res) => {
+  const provider = req.path.startsWith("/stripe") ? "stripe" : "paypal";
+  res.set({ "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" }).type("html").send(renderPaymentReturnPage(provider));
 });
 
 // ---------------------- SERVER-RENDERED SEO PAGES ----------------------

@@ -208,7 +208,7 @@ export default function App() {
   const totalCartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
   return (
-    <div className="min-h-screen bg-alabaster-pearl selection:bg-spruce-100 selection:text-spruce-950 font-sans text-spruce-900" id="sujood-root">
+    <div className="min-h-screen bg-alabaster-pearl font-sans text-spruce-900" id="sujood-root">
       
       {/* 1. PREMIUM FLOATING HEADER */}
       <header className="sticky top-0 z-40 bg-alabaster-pearl/80 backdrop-blur-md border-b border-spruce-100/60" id="main-header">

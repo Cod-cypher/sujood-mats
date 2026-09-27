@@ -94,7 +94,30 @@ export interface SaveOrderInput {
   discount: number;
   total: number;
   estimatedDelivery?: string | null;
+  /**
+   * True for an order whose payment is about to be taken online (PayPal, Stripe). It is saved as
+   * "pending" and does not count as a sale until markOrderPaid runs. False/omitted is the
+   * invoice flow: the order is real straight away and waits for a manually sent invoice.
+   */
+  awaitingCapture?: boolean;
 }
+
+export type PaymentProvider = "paypal" | "stripe";
+
+export interface OrderPayment {
+  provider: PaymentProvider;
+  /** PayPal order id / Stripe Checkout Session id. */
+  providerOrderId: string;
+  /** PayPal capture id / Stripe PaymentIntent id: the reference on the provider's statement. */
+  captureId: string | null;
+  /** "paid" = money received. "processing" = the provider is still reviewing the payment. */
+  state: "paid" | "processing";
+}
+
+// An order row created for an online payment that has not been captured (yet, or ever:
+// the buyer may close the PayPal window). These are not sales, so reporting skips them.
+const PENDING = "pending";
+const notPending = { paymentStatus: { not: PENDING } };
 
 // JSON helper: Prisma wants Prisma.JsonNull (not JS null) to store SQL NULL.
 const asJson = (v: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull =>
@@ -235,7 +258,7 @@ export async function syncCart(input: CartSyncInput): Promise<void> {
           colorway: item.colorway ?? null,
           price: item.price,
           quantity: item.quantity,
-          configuration: asJson(item.configuration),
+        configuration: asJson(item.configuration),
           imageUrl: item.imageUrl ?? null,
         })),
       });
@@ -263,7 +286,8 @@ export async function saveOrder(input: SaveOrderInput): Promise<void> {
   // never be refused because the visitor's analytics session is missing.
   const { id: sessionId, country, city } = await ensureSession(input.sessionId);
 
-  // Order + line items + cart conversion + purchase event: all-or-nothing.
+  // Order + line items (+ cart conversion + purchase event, unless a payment is still to
+  // be captured: markOrderPaid does those once the money is in): all-or-nothing.
   await prisma.$transaction(async (tx) => {
     await tx.order.create({
       data: {
@@ -284,10 +308,10 @@ export async function saveOrder(input: SaveOrderInput): Promise<void> {
         subtotal: input.subtotal,
         discount: input.discount,
         total: input.total,
-        // Checkout takes no payment: the order waits for a manually sent invoice.
+        // Invoice checkout takes no payment: the order waits for a manually sent invoice.
         // Set explicitly because the column defaults predate that flow ("paid").
-        status: "AWAITING PAYMENT",
-        paymentStatus: "unpaid",
+        status: input.awaitingCapture ? "PAYMENT PENDING" : "AWAITING PAYMENT",
+        paymentStatus: input.awaitingCapture ? PENDING : "unpaid",
         estimatedDelivery: input.estimatedDelivery ?? null,
         items: {
           create: input.cartItems.map((item) => ({
@@ -302,6 +326,8 @@ export async function saveOrder(input: SaveOrderInput): Promise<void> {
         },
       },
     });
+
+    if (input.awaitingCapture) return;
 
     if (input.cartId) {
       // updateMany avoids throwing if the cart was never synced server-side.
@@ -323,6 +349,57 @@ export async function saveOrder(input: SaveOrderInput): Promise<void> {
         metadata: { itemCount: input.cartItems.reduce((n, i) => n + i.quantity, 0) },
       },
     });
+  });
+}
+
+/**
+ * Turns a pending order into a real one after its payment was captured: flips the payment
+ * status, converts the cart and records the purchase event, all-or-nothing. Returns false
+ * if the order was not pending (already marked by an earlier call), so callers can avoid
+ * sending the confirmation emails twice.
+ */
+export async function markOrderPaid(orderId: string, payment: OrderPayment): Promise<boolean> {
+  const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
+  if (!order) return false;
+  const { id: sessionId, country, city } = await ensureSession(order.sessionId);
+
+  return prisma.$transaction(async (tx) => {
+    // Conditional update, so two concurrent captures of one order cannot both win.
+    const updated = await tx.order.updateMany({
+      where: { id: orderId, paymentStatus: PENDING },
+      data:
+        payment.state === "paid"
+          ? { status: "PAID - PREPARING", paymentStatus: "paid" }
+          : { status: "PAYMENT UNDER REVIEW", paymentStatus: "processing" },
+    });
+    if (updated.count === 0) return false;
+
+    if (order.cartId) {
+      await tx.cart.updateMany({
+        where: { id: order.cartId },
+        data: { status: "converted", convertedOrderId: orderId, convertedAt: new Date() },
+      });
+    }
+
+    await tx.event.create({
+      data: {
+        sessionId,
+        eventType: "purchase",
+        value: order.total,
+        cartId: order.cartId,
+        orderId,
+        country,
+        city,
+        metadata: {
+          itemCount: order.items.reduce((n, i) => n + i.quantity, 0),
+          paymentProvider: payment.provider,
+          providerOrderId: payment.providerOrderId,
+          providerPaymentId: payment.captureId,
+          paymentState: payment.state,
+        },
+      },
+    });
+    return true;
   });
 }
 
@@ -352,8 +429,8 @@ async function distinctSessions(eventType: string): Promise<number> {
 export async function getOverview() {
   const [totalSessions, totalOrders, revenue, abandoned, sessionsWithAdd] = await Promise.all([
     prisma.session.count(),
-    prisma.order.count(),
-    prisma.order.aggregate({ _sum: { total: true }, _avg: { total: true } }),
+    prisma.order.count({ where: notPending }),
+    prisma.order.aggregate({ where: notPending, _sum: { total: true }, _avg: { total: true } }),
     prisma.cart.aggregate({ where: { status: "abandoned" }, _count: { _all: true }, _sum: { subtotal: true } }),
     distinctSessions("add_to_cart"),
   ]);
@@ -418,6 +495,7 @@ export async function getAbandonedCarts(limit = 50) {
 export async function getRevenueByLocation() {
   const groups = await prisma.order.groupBy({
     by: ["country"],
+    where: notPending,
     _count: { _all: true },
     _sum: { total: true },
     _avg: { total: true },
@@ -450,9 +528,11 @@ export async function getTopProducts() {
   // Actual sales from order line items.
   const sales = await prisma.$queryRaw<{ product_id: string; units_sold: number; revenue: number }[]>(
     Prisma.sql`
-      SELECT product_id, SUM(quantity)::int AS units_sold, SUM(price * quantity)::float AS revenue
-      FROM order_items
-      GROUP BY product_id
+      SELECT oi.product_id, SUM(oi.quantity)::int AS units_sold, SUM(oi.price * oi.quantity)::float AS revenue
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      WHERE o.payment_status <> ${PENDING}
+      GROUP BY oi.product_id
     `
   );
   const salesById = new Map(sales.map((s) => [s.product_id, s]));

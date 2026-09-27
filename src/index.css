@@ -55,6 +55,14 @@ body {
   overflow-x: hidden;
 }
 
+/* Selected text: gold with dark ink, so a selection is unmistakable on the dark theme
+   (and on the light cart header). Set here, not on a wrapper, so it also covers the cart
+   and checkout, which render outside the page flow, and text typed into form fields. */
+::selection {
+  background-color: var(--color-clay-ochre);
+  color: var(--color-clay-ink);
+}
+
 /* Keep "/#section" targets clear of the 80px sticky header. */
 [id$="-section"] {
   scroll-margin-top: 6rem;
