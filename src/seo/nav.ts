@@ -44,6 +44,7 @@ export const FOOTER_COLUMNS: { title: string; items: NavItem[] }[] = [
       { label: "Orthopedic Prayer Mats", href: "/orthopedic-prayer-mats/" },
       { label: "Wool Prayer Mats", href: "/wool-prayer-mats/" },
       { label: "Travel Prayer Mats", href: "/travel-prayer-mats/" },
+      { label: "Luxury Prayer Mats", href: "/luxury-prayer-mats/" },
     ],
   },
   {

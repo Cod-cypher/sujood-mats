@@ -73,6 +73,12 @@ table.specs thead th, table.specs tbody th { color: #f5f5f0; font-weight: 600; }
 .shop-card strong { color: #f5f5f0; font-family: Georgia, serif; font-size: 1.05rem; }
 .shop-card .shop-price { color: var(--gold-bright); font-weight: 600; margin-top: 4px; }
 .shop-card .shop-link { color: var(--text); text-decoration: underline; text-underline-offset: 3px; margin-top: 2px; }
+/* Cards with their own buy button (/luxury-prayer-mats/): the image and name link to the
+   product page, and the button, kept level across cards, goes to the colour picker. */
+.shop-card .shop-main { display: flex; flex-direction: column; gap: 4px; text-decoration: none; }
+.shop-card .shop-main:hover strong { color: var(--gold-bright); }
+.shop-card .shop-buy { margin-top: auto; padding-top: 10px; }
+.shop-card .shop-buy .btn { display: block; text-align: center; }
 
 /* ---- Site header and footer: mirror the homepage (src/App.tsx). ---- */
 @font-face {
