@@ -115,8 +115,8 @@ ${PRODUCTS.map(card).join("\n")}
 
       <h3>Velvet over memory foam: the Rawdah Orthopedic</h3>
       <p>
-        Here the luxury is comfort. The ${link("rawdah-ortho")} is covered in Pakistani chenille
-        velvet, soft under the palms and forehead. Beneath the cover, a 12mm dual-density
+        Here the luxury is comfort. The ${link("rawdah-ortho")} is covered in Pakistani <a href="/velvet-prayer-mats/">chenille
+        velvet</a>, soft under the palms and forehead. Beneath the cover, a 12mm dual-density
         memory-foam core eases the pressure of kneeling and prostration on the knees and ankles.
         A micro-textured rubber underlay holds the mat in place on tile or wood, and
         double-bound edges help it keep its shape. Read more about

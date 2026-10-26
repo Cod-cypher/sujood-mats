@@ -27,6 +27,7 @@ import { prayerMatGifts } from "./pages/prayer-mat-gifts";
 import { islamicGeometricPatternsPrayerMats } from "./pages/islamic-geometric-patterns-prayer-mats";
 import { prayerRugs } from "./pages/prayer-rugs";
 import { luxuryPrayerMats } from "./pages/luxury-prayer-mats";
+import { velvetPrayerMats } from "./pages/velvet-prayer-mats";
 
 export const HOME_UPDATED = "2026-09-20";
 
@@ -104,7 +105,7 @@ ${cardList(PRODUCT_PAGES)}
 
 // Commercial pages. Kept out of GUIDES so /guides/ and its ItemList stay as they are,
 // and appended last so existing sitemap entries keep their order.
-const SHOP_PAGES: SeoPage[] = [luxuryPrayerMats];
+const SHOP_PAGES: SeoPage[] = [luxuryPrayerMats, velvetPrayerMats];
 
 export const SEO_PAGES: SeoPage[] = [guidesHub, ...GUIDES, ...PRODUCT_PAGES, ...SHOP_PAGES];
 
